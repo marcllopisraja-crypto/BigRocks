@@ -5,7 +5,7 @@ import pandas as pd
 # Configuració de la pàgina
 st.set_page_config(page_title="Big Rocks - Sorigué", layout="wide", page_icon="🪨")
 
-# CSS Corporatiu (Cian Sorigué aproximat #009FE3)
+# CSS Corporatiu (Cian Sorigué aproximat #009FE3) i ajustos de disseny
 st.markdown("""
     <style>
     .stButton>button[kind="primary"] {
@@ -13,8 +13,9 @@ st.markdown("""
         color: white !important;
         border-color: #009FE3 !important;
     }
-    div[data-baseweb="progress-bar"] > div > div {
-        background-color: #009FE3 !important;
+    /* Fem que els 'radio buttons' s'alineïn millor amb la resta d'elements */
+    div[role="radiogroup"] {
+        margin-top: 5px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -28,7 +29,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS usuaris (username TEXT PRIMARY KEY, password TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS big_rocks (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, mes TEXT, nom TEXT, persones TEXT, reunions TEXT, notes_progres TEXT, pregunta TEXT, passos TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS tars (id INTEGER PRIMARY KEY AUTOINCREMENT, id_br INTEGER, num TEXT, descripcio TEXT, progres INTEGER, estat TEXT, FOREIGN KEY(id_br) REFERENCES big_rocks(id))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS mesos_tancats (username TEXT, mes TEXT, PRIMARY KEY(username, mes))''') # Nova taula per controlar el bloqueig
+    c.execute('''CREATE TABLE IF NOT EXISTS mesos_tancats (username TEXT, mes TEXT, PRIMARY KEY(username, mes))''') 
     conn.commit()
     conn.close()
 
@@ -49,19 +50,50 @@ def fetch_query(query, params=()):
     conn.close()
     return data
 
-# Funció per dibuixar barres de progrés semafòriques
-def progress_bar_colorida(progres):
-    if progres <= 25: color = "#FF4B4B" # Vermell
-    elif progres <= 50: color = "#FFA500" # Taronja
-    elif progres <= 99: color = "#FFD700" # Groc
-    else: color = "#00C851" # Verd
+# Funció per dibuixar la nova barra de progrés integrada
+def progress_bar_colorida(progres, is_global=False):
+    # Colors de l'escala
+    if progres <= 25: 
+        color = "#FF4B4B" # Vermell
+    elif progres <= 50: 
+        color = "#FFA500" # Taronja
+    elif progres <= 99: 
+        color = "#FFD700" # Groc
+    else: 
+        color = "#00C851" # Verd
+        
+    # Ajustos visuals depenent de si és la barra global o la d'un TAR
+    height = "32px" if is_global else "36px"
+    margin = "5px 0 15px 0" if is_global else "2px 0 0 0"
+    text = f"Avenç global: {progres}%" if is_global else f"{progres}%"
+    
+    # Text fosc per fons clars (groc/taronja) i text blanc per fons foscos
+    text_color = "#333" if progres == 0 or (is_global and 25 < progres <= 99) else "white"
     
     html = f"""
-    <div style="width: 100%; background-color: #e6e6e6; border-radius: 10px; height: 12px; margin-top: 10px;">
-        <div style="width: {progres}%; background-color: {color}; height: 12px; border-radius: 10px;"></div>
+    <div style="width: 100%; background-color: #f0f2f6; border-radius: 6px; height: {height}; position: relative; margin: {margin}; border: 1px solid #e0e0e0;">
+        <div style="width: {progres}%; background-color: {color}; height: 100%; border-radius: 5px; transition: width 0.3s ease-in-out;"></div>
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 14px; font-weight: bold; color: {text_color}; text-shadow: {'1px 1px 2px rgba(0,0,0,0.2)' if text_color == 'white' else 'none'};">
+            {text}
+        </div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+# Callbacks per actualitzar l'estat evitant retards en la UI
+def actualitzar_progres_tar_cb(tar_id, key):
+    nou_progres = st.session_state[key]
+    run_query("UPDATE tars SET progres=? WHERE id=?", (nou_progres, tar_id))
+
+def actualitzar_text_tar_cb(tar_id, key):
+    nova_desc = st.session_state[key]
+    run_query("UPDATE tars SET descripcio=? WHERE id=?", (nova_desc, tar_id))
+
+def arxivar_tar(id_tar): 
+    run_query("UPDATE tars SET estat='Arxivat' WHERE id=?", (id_tar,))
+    
+def actualitzar_notes_br(id_br, notes, pregunta, passos): 
+    run_query("UPDATE big_rocks SET notes_progres=?, pregunta=?, passos=? WHERE id=?", (notes, pregunta, passos, id_br))
 
 # ==========================================
 # 2. SISTEMA DE LOGIN
@@ -69,7 +101,6 @@ def progress_bar_colorida(progres):
 if 'usuari_actual' not in st.session_state: st.session_state.usuari_actual = None
 
 if st.session_state.usuari_actual is None:
-    # Mostrem el logo al login
     try:
         st.image("sorigue_logo_RGB-positivo.png", width=300)
     except:
@@ -103,27 +134,20 @@ if st.session_state.usuari_actual is None:
     st.stop()
 
 # ==========================================
-# 3. SIDEBAR (LOGO, NAVEGACIÓ I HISTÒRIC)
+# 3. SIDEBAR (NAVEGACIÓ I HISTÒRIC)
 # ==========================================
 USUARI = st.session_state.usuari_actual
 
-try:
-    st.sidebar.image("sorigue_logo_RGB-positivo.png", use_container_width=True)
-except:
-    st.sidebar.title("Sorigué - Big Rocks")
-
 st.sidebar.write(f"👤 Connectat com: **{USUARI}**")
 
-# Obtenir llista de mesos on l'usuari té dades
 mesos_disponibles = [row[0] for row in fetch_query("SELECT DISTINCT mes FROM big_rocks WHERE username=?", (USUARI,))]
-if "Juliol 2026" not in mesos_disponibles: mesos_disponibles.insert(0, "Juliol 2026") # Mes inicial per defecte
+if "Juliol 2026" not in mesos_disponibles: mesos_disponibles.insert(0, "Juliol 2026") 
 
 mes_seleccionat = st.sidebar.selectbox("📅 Navegar pels mesos:", mesos_disponibles, index=mesos_disponibles.index(st.session_state.mes_actual) if st.session_state.mes_actual in mesos_disponibles else 0)
 st.session_state.mes_actual = mes_seleccionat
 
 MES = st.session_state.mes_actual
 
-# Comprovar si el mes està tancat
 mes_tancat_db = fetch_query("SELECT * FROM mesos_tancats WHERE username=? AND mes=?", (USUARI, MES))
 es_tancat = len(mes_tancat_db) > 0
 
@@ -140,12 +164,6 @@ if st.sidebar.button("Tancar Sessió"):
     st.session_state.usuari_actual = None
     st.rerun()
 
-# Funcions DB
-def actualitzar_progres_tar(id_tar, nou_progres): run_query("UPDATE tars SET progres=? WHERE id=?", (nou_progres, id_tar))
-def actualitzar_text_tar(id_tar, nova_desc): run_query("UPDATE tars SET descripcio=? WHERE id=?", (nova_desc, id_tar))
-def arxivar_tar(id_tar): run_query("UPDATE tars SET estat='Arxivat' WHERE id=?", (id_tar,))
-def actualitzar_notes_br(id_br, notes, pregunta, passos): run_query("UPDATE big_rocks SET notes_progres=?, pregunta=?, passos=? WHERE id=?", (notes, pregunta, passos, id_br))
-
 # ==========================================
 # 4. PANTALLA PRINCIPAL: DASHBOARD
 # ==========================================
@@ -153,6 +171,13 @@ if 'pantalla' not in st.session_state: st.session_state.pantalla = 'dashboard'
 if 'mostrar_formulari_br' not in st.session_state: st.session_state.mostrar_formulari_br = False
 
 if st.session_state.pantalla == 'dashboard':
+    
+    # Logo a dalt de tot de la pantalla de Big Rocks
+    try:
+        st.image("sorigue_logo_RGB-positivo.png", width=250)
+    except:
+        pass
+        
     col_titol, col_boto = st.columns([3, 1])
     with col_titol:
         st.title(f"🪨 Dashboard - {MES}")
@@ -176,23 +201,34 @@ if st.session_state.pantalla == 'dashboard':
                 tars = fetch_query("SELECT id, num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu'", (br_id,))
                 progres_mitja = int(sum(t[3] for t in tars) / len(tars)) if tars else 0
                 
-                # Barra global de la Big Rock amb escala de colors
-                st.write(f"**Avenç global: {progres_mitja}%**")
-                progress_bar_colorida(progres_mitja)
-                st.markdown("---")
+                # Barra global de la Big Rock amb escala de colors i text integrat
+                progress_bar_colorida(progres_mitja, is_global=True)
                 
                 for tar in tars:
                     tar_id, num, desc, progres = tar
-                    col1, col2, col3, col4 = st.columns([1, 4, 3, 1])
-                    with col1: st.write(f"**{num}**")
+                    # Forcem que el progress només sigui 0, 50 o 100 per si hi ha dades velles
+                    if progres not in [0, 50, 100]: progres = 0
+                    
+                    # Estructura de columnes actualitzada: 
+                    # Col1: TAR X | Col2: Descripció | Col3: Selector 0/50/100 | Col4: Barra Visual | Col5: Paperera
+                    col1, col2, col3, col4, col5 = st.columns([1, 4, 3, 2, 1])
+                    
+                    with col1: 
+                        st.write(f"**{num}**")
                     with col2:
-                        st.text_input("Desc", value=desc, key=f"desc_{tar_id}", label_visibility="collapsed", disabled=es_tancat,
-                                      on_change=actualitzar_text_tar, args=(tar_id, st.session_state.get(f"desc_{tar_id}", desc)))
+                        k_desc = f"desc_{tar_id}"
+                        st.text_input("Desc", value=desc, key=k_desc, label_visibility="collapsed", disabled=es_tancat,
+                                      on_change=actualitzar_text_tar_cb, args=(tar_id, k_desc))
                     with col3:
-                        st.slider("Progrés", min_value=0, max_value=100, value=progres, step=10, key=f"slider_{tar_id}", label_visibility="collapsed", disabled=es_tancat,
-                                  on_change=actualitzar_progres_tar, args=(tar_id, st.session_state.get(f"slider_{tar_id}", progres)))
-                        progress_bar_colorida(progres) # Visualització semàfor a sota l'slider
+                        k_radio = f"radio_{tar_id}"
+                        st.radio("Estat", options=[0, 50, 100], format_func=lambda x: f"{x}%", 
+                                 index=[0, 50, 100].index(progres), horizontal=True, key=k_radio, 
+                                 label_visibility="collapsed", disabled=es_tancat,
+                                 on_change=actualitzar_progres_tar_cb, args=(tar_id, k_radio))
                     with col4:
+                        # La barra visual maca al costat mateix del selector
+                        progress_bar_colorida(progres, is_global=False)
+                    with col5:
                         st.button("🗑️", key=f"btn_{tar_id}", on_click=arxivar_tar, args=(tar_id,), disabled=es_tancat)
                 
                 with st.expander("📝 Detalls, Preguntes i Pròxims Passos", expanded=False):
@@ -232,6 +268,11 @@ if st.session_state.pantalla == 'dashboard':
 # 5. PANTALLA DE RESUM (TANCAMENT)
 # ==========================================
 elif st.session_state.pantalla == 'resum':
+    try:
+        st.image("sorigue_logo_RGB-positivo.png", width=250)
+    except:
+        pass
+        
     st.title(f"📊 Resum de Tancament - {MES}")
     
     brs = fetch_query("SELECT id, nom, persones, reunions FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
@@ -246,11 +287,9 @@ elif st.session_state.pantalla == 'resum':
             if t[1] == 100: tars_completats.append(f"{br[1]} ➡️ {t[0]}")
             else: tars_pendents.append(f"{br[1]} ➡️ {t[0]} ({t[1]}%)")
     
-    # Càlcul de compliment global del mes
     compliment_global = int(sumatori_progres / total_tars) if total_tars > 0 else 0
     
-    st.markdown(f"### 📈 Compliment Global del Mes: **{compliment_global}%**")
-    progress_bar_colorida(compliment_global)
+    progress_bar_colorida(compliment_global, is_global=True)
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.markdown("---")
@@ -266,7 +305,6 @@ elif st.session_state.pantalla == 'resum':
     def confirmar_tancament():
         run_query("INSERT OR IGNORE INTO mesos_tancats (username, mes) VALUES (?, ?)", (USUARI, MES))
         
-        # Lògica de trasllat al mes següent
         mesos = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"]
         parts = MES.split(" ")
         mes_actual_nom, any_actual = parts[0], int(parts[1])
