@@ -2,31 +2,96 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# Configuració de la pàgina
+# ==========================================
+# 0. CONFIGURACIÓ I DISSENY CORPORATIU
+# ==========================================
 st.set_page_config(page_title="Big Rocks - Sorigué", layout="wide", page_icon="🪨")
 
-# CSS Corporatiu (Cian Sorigué aproximat #009FE3) i ajustos de disseny
 st.markdown("""
     <style>
+    #MainMenu {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     .stButton>button[kind="primary"] {
         background-color: #009FE3 !important;
         color: white !important;
         border-color: #009FE3 !important;
     }
-    /* Fem que els 'radio buttons' s'alineïn millor amb la resta d'elements */
-    div[role="radiogroup"] {
-        margin-top: 5px;
-    }
+    div[role="radiogroup"] { margin-top: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. CONFIGURACIÓ DE LA BASE DE DADES
+# 1. DICCIONARI DE TRADUCCIONS
+# ==========================================
+TRANS = {
+    'ca': {
+        'login_title': "🔐 Accés a la Plataforma", 'login_tab': "🔐 Iniciar Sessió", 'reg_tab': "📝 Registrar Nou Usuari",
+        'usr': "Nom d'usuari", 'pwd': "Contrasenya", 'new_usr': "Nou nom d'usuari",
+        'enter': "Entrar", 'register': "Registrar",
+        'err_login': "Usuari o contrasenya incorrectes.",
+        'succ_reg': "Usuari creat correctament! Ara pots iniciar sessió.",
+        'err_reg': "Aquest nom d'usuari ja existeix.",
+        'conn_as': "👤 Connectat com:", 'lang': "🌐 Idioma",
+        'nav_months': "📅 Navegar pels mesos:", 'closed_month': "🔒 Aquest mes està TANCAT.",
+        'unlock': "🔓 Desbloquejar Mes", 'open_month': "✏️ Mes Obert (Editable)",
+        'logout': "Tancar Sessió",
+        'eval_close': "📊 Avaluar i Tancar Mes", 'no_br': "No hi ha cap Big Rock. Afegeix-ne de noves a sota.",
+        'key_ppl': "👥 **Persones clau:**", 'key_meet': "📅 **Reunions:**",
+        'global_prog': "Assoliment global:", 'state': "Estat", 'desc': "Descripció",
+        'details': "📝 Detalls, Preguntes i Pròxims Passos", 'prog': "Progrés:", 'need': "Pregunta o necessitat:",
+        'next_steps': "Pròxims passos:", 'save_notes': "💾 Guardar Notes",
+        'create_br': "➕ Crear Nova Big Rock", 'config_br': "Configura la teva nova Big Rock",
+        'title_br': "Títol de la Big Rock", 'save': "Guardar",
+        'summary': "📊 Resum de Tancament", 'global_comp': "📈 Grau de Compliment Global",
+        'successes': "#### ✅ Èxits (100%)", 'carry_over': "#### 🔄 Es traspassen",
+        'cancel': "⬅️ Cancel·lar", 'confirm_close': "🔒 Confirmar Tancament i Crear Mes Següent",
+        'months': ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"]
+    },
+    'es': {
+        'login_title': "🔐 Acceso a la Plataforma", 'login_tab': "🔐 Iniciar Sesión", 'reg_tab': "📝 Registrar Nuevo Usuario",
+        'usr': "Nombre de usuario", 'pwd': "Contraseña", 'new_usr': "Nuevo nombre de usuario",
+        'enter': "Entrar", 'register': "Registrar",
+        'err_login': "Usuario o contraseña incorrectos.",
+        'succ_reg': "¡Usuario creado correctamente! Ahora puedes iniciar sesión.",
+        'err_reg': "Este nombre de usuario ya existe.",
+        'conn_as': "👤 Conectado como:", 'lang': "🌐 Idioma",
+        'nav_months': "📅 Navegar por los meses:", 'closed_month': "🔒 Este mes está CERRADO.",
+        'unlock': "🔓 Desbloquear Mes", 'open_month': "✏️ Mes Abierto (Editable)",
+        'logout': "Cerrar Sesión",
+        'eval_close': "📊 Evaluar y Cerrar Mes", 'no_br': "No hay ninguna Big Rock. Añade nuevas abajo.",
+        'key_ppl': "👥 **Personas clave:**", 'key_meet': "📅 **Reuniones:**",
+        'global_prog': "Avance global:", 'state': "Estado", 'desc': "Descripción",
+        'details': "📝 Detalles, Preguntas y Próximos Pasos", 'prog': "Progreso:", 'need': "Pregunta o necesidad:",
+        'next_steps': "Próximos pasos:", 'save_notes': "💾 Guardar Notas",
+        'create_br': "➕ Crear Nueva Big Rock", 'config_br': "Configura tu nueva Big Rock",
+        'title_br': "Título de la Big Rock", 'save': "Guardar",
+        'summary': "📊 Resumen de Cierre", 'global_comp': "📈 Grado de Cumplimiento Global",
+        'successes': "#### ✅ Éxitos (100%)", 'carry_over': "#### 🔄 Se traspasan",
+        'cancel': "⬅️ Cancelar", 'confirm_close': "🔒 Confirmar Cierre y Crear Mes Siguiente",
+        'months': ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    }
+}
+
+def t(key):
+    lang = st.session_state.get('idioma', 'ca')
+    return TRANS[lang].get(key, key)
+
+# ==========================================
+# 2. BASE DE DADES (AMB IDIOMA)
 # ==========================================
 def init_db():
     conn = sqlite3.connect('bigrocks.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS usuaris (username TEXT PRIMARY KEY, password TEXT)''')
+    
+    # Actualitzar taula d'usuaris vells sense esborrar dades
+    try:
+        c.execute("ALTER TABLE usuaris ADD COLUMN language TEXT DEFAULT 'ca'")
+    except sqlite3.OperationalError:
+        pass # La columna ja existeix
+        
     c.execute('''CREATE TABLE IF NOT EXISTS big_rocks (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, mes TEXT, nom TEXT, persones TEXT, reunions TEXT, notes_progres TEXT, pregunta TEXT, passos TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS tars (id INTEGER PRIMARY KEY AUTOINCREMENT, id_br INTEGER, num TEXT, descripcio TEXT, progres INTEGER, estat TEXT, FOREIGN KEY(id_br) REFERENCES big_rocks(id))''')
     c.execute('''CREATE TABLE IF NOT EXISTS mesos_tancats (username TEXT, mes TEXT, PRIMARY KEY(username, mes))''') 
@@ -50,24 +115,18 @@ def fetch_query(query, params=()):
     conn.close()
     return data
 
-# Funció per dibuixar la nova barra de progrés integrada
+# ==========================================
+# 3. FUNCIONS VISUALS I CALLBACKS
+# ==========================================
 def progress_bar_colorida(progres, is_global=False):
-    # Colors de l'escala
-    if progres <= 25: 
-        color = "#FF4B4B" # Vermell
-    elif progres <= 50: 
-        color = "#FFA500" # Taronja
-    elif progres <= 99: 
-        color = "#FFD700" # Groc
-    else: 
-        color = "#00C851" # Verd
+    if progres <= 25: color = "#FF4B4B"
+    elif progres <= 50: color = "#FFA500"
+    elif progres <= 99: color = "#FFD700"
+    else: color = "#00C851"
         
-    # Ajustos visuals depenent de si és la barra global o la d'un TAR
     height = "32px" if is_global else "36px"
     margin = "5px 0 15px 0" if is_global else "2px 0 0 0"
-    text = f"Avenç global: {progres}%" if is_global else f"{progres}%"
-    
-    # Text fosc per fons clars (groc/taronja) i text blanc per fons foscos
+    text = f"{t('global_prog')} {progres}%" if is_global else f"{progres}%"
     text_color = "#333" if progres == 0 or (is_global and 25 < progres <= 99) else "white"
     
     html = f"""
@@ -80,182 +139,170 @@ def progress_bar_colorida(progres, is_global=False):
     """
     st.markdown(html, unsafe_allow_html=True)
 
-# Callbacks per actualitzar l'estat evitant retards en la UI
-def actualitzar_progres_tar_cb(tar_id, key):
-    nou_progres = st.session_state[key]
-    run_query("UPDATE tars SET progres=? WHERE id=?", (nou_progres, tar_id))
-
-def actualitzar_text_tar_cb(tar_id, key):
-    nova_desc = st.session_state[key]
-    run_query("UPDATE tars SET descripcio=? WHERE id=?", (nova_desc, tar_id))
-
-def arxivar_tar(id_tar): 
-    run_query("UPDATE tars SET estat='Arxivat' WHERE id=?", (id_tar,))
-    
-def actualitzar_notes_br(id_br, notes, pregunta, passos): 
-    run_query("UPDATE big_rocks SET notes_progres=?, pregunta=?, passos=? WHERE id=?", (notes, pregunta, passos, id_br))
+def update_db_val(table, field, val, uid): run_query(f"UPDATE {table} SET {field}=? WHERE id=?", (val, uid))
+def arxivar_tar(id_tar): run_query("UPDATE tars SET estat='Arxivat' WHERE id=?", (id_tar,))
+def canviar_idioma(): run_query("UPDATE usuaris SET language=? WHERE username=?", (st.session_state.idioma_selector, st.session_state.usuari_actual))
 
 # ==========================================
-# 2. SISTEMA DE LOGIN
+# 4. SISTEMA DE LOGIN
 # ==========================================
 if 'usuari_actual' not in st.session_state: st.session_state.usuari_actual = None
 
 if st.session_state.usuari_actual is None:
-    try:
-        st.image("sorigue_logo_RGB-positivo.png", width=300)
-    except:
-        st.title("🪨 Sistema Big Rocks")
+    st.write("<br><br>", unsafe_allow_html=True)
+    col_logo, col_titol = st.columns([1, 2])
+    with col_logo:
+        try: st.image("sorigue_logo_RGB-positivo.png", width=250)
+        except: st.title("🪨 Sorigué")
+    with col_titol: st.subheader(t('login_title'))
         
-    st.subheader("🔐 Accés a la Plataforma")
-    tab1, tab2 = st.tabs(["Iniciar Sessió", "Registrar Nou Usuari"])
+    st.markdown("---")
+    tab1, tab2 = st.tabs([t('login_tab'), t('reg_tab')])
     
     with tab1:
         with st.form("login_form"):
-            usuari = st.text_input("Nom d'usuari")
-            contrasenya = st.text_input("Contrasenya", type="password")
-            if st.form_submit_button("Entrar", type="primary"):
-                if fetch_query("SELECT * FROM usuaris WHERE username=? AND password=?", (usuari, contrasenya)):
+            usuari = st.text_input(t('usr'))
+            contrasenya = st.text_input(t('pwd'), type="password")
+            if st.form_submit_button(t('enter'), type="primary"):
+                user_data = fetch_query("SELECT language FROM usuaris WHERE username=? AND password=?", (usuari, contrasenya))
+                if user_data:
                     st.session_state.usuari_actual = usuari
-                    st.session_state.mes_actual = "Juliol 2026"
+                    st.session_state.idioma = user_data[0][0] if user_data[0][0] else 'ca'
+                    
+                    # Definim el mes inicial segons l'idioma
+                    mes_inicial = "Juliol 2026" if st.session_state.idioma == 'ca' else "Julio 2026"
+                    st.session_state.mes_actual = mes_inicial
                     st.session_state.pantalla = 'dashboard'
                     st.rerun()
                 else:
-                    st.error("Usuari o contrasenya incorrectes.")
+                    st.error(t('err_login'))
     with tab2:
         with st.form("register_form"):
-            nou_usuari = st.text_input("Nou nom d'usuari")
-            nova_contra = st.text_input("Contrasenya", type="password")
-            if st.form_submit_button("Registrar", type="primary"):
+            nou_usuari = st.text_input(t('new_usr'))
+            nova_contra = st.text_input(t('pwd'), type="password")
+            if st.form_submit_button(t('register'), type="primary"):
                 try:
-                    run_query("INSERT INTO usuaris (username, password) VALUES (?, ?)", (nou_usuari, nova_contra))
-                    st.success("Usuari creat correctament! Ara pots iniciar sessió.")
+                    run_query("INSERT INTO usuaris (username, password, language) VALUES (?, ?, 'ca')", (nou_usuari, nova_contra))
+                    st.success(t('succ_reg'))
                 except sqlite3.IntegrityError:
-                    st.error("Aquest nom d'usuari ja existeix.")
+                    st.error(t('err_reg'))
     st.stop()
 
 # ==========================================
-# 3. SIDEBAR (NAVEGACIÓ I HISTÒRIC)
+# 5. SIDEBAR (NAVEGACIÓ I PREFERÈNCIES)
 # ==========================================
 USUARI = st.session_state.usuari_actual
+st.sidebar.write(f"{t('conn_as')} **{USUARI}**")
 
-st.sidebar.write(f"👤 Connectat com: **{USUARI}**")
+# Selector d'Idioma
+lang_idx = 0 if st.session_state.idioma == 'ca' else 1
+idioma_triat = st.sidebar.selectbox(t('lang'), ['ca', 'es'], index=lang_idx, format_func=lambda x: "Català" if x=='ca' else "Castellano", key="idioma_selector", on_change=canviar_idioma)
+st.session_state.idioma = idioma_triat
 
+st.sidebar.markdown("---")
+
+# Mesos
 mesos_disponibles = [row[0] for row in fetch_query("SELECT DISTINCT mes FROM big_rocks WHERE username=?", (USUARI,))]
-if "Juliol 2026" not in mesos_disponibles: mesos_disponibles.insert(0, "Juliol 2026") 
+mes_ini = "Juliol 2026" if st.session_state.idioma == 'ca' else "Julio 2026"
+if mes_ini not in mesos_disponibles: mesos_disponibles.insert(0, mes_ini)
 
-mes_seleccionat = st.sidebar.selectbox("📅 Navegar pels mesos:", mesos_disponibles, index=mesos_disponibles.index(st.session_state.mes_actual) if st.session_state.mes_actual in mesos_disponibles else 0)
+mes_seleccionat = st.sidebar.selectbox(t('nav_months'), mesos_disponibles, index=mesos_disponibles.index(st.session_state.mes_actual) if st.session_state.mes_actual in mesos_disponibles else 0)
 st.session_state.mes_actual = mes_seleccionat
-
 MES = st.session_state.mes_actual
 
 mes_tancat_db = fetch_query("SELECT * FROM mesos_tancats WHERE username=? AND mes=?", (USUARI, MES))
 es_tancat = len(mes_tancat_db) > 0
 
 if es_tancat:
-    st.sidebar.error("🔒 Aquest mes està TANCAT.")
-    if st.sidebar.button("🔓 Desbloquejar Mes"):
+    st.sidebar.error(t('closed_month'))
+    if st.sidebar.button(t('unlock')):
         run_query("DELETE FROM mesos_tancats WHERE username=? AND mes=?", (USUARI, MES))
         st.rerun()
 else:
-    st.sidebar.success("✏️ Mes Obert (Editable)")
+    st.sidebar.success(t('open_month'))
 
 st.sidebar.markdown("---")
-if st.sidebar.button("Tancar Sessió"):
+if st.sidebar.button(t('logout')):
     st.session_state.usuari_actual = None
     st.rerun()
 
 # ==========================================
-# 4. PANTALLA PRINCIPAL: DASHBOARD
+# 6. PANTALLA PRINCIPAL: DASHBOARD
 # ==========================================
 if 'pantalla' not in st.session_state: st.session_state.pantalla = 'dashboard'
 if 'mostrar_formulari_br' not in st.session_state: st.session_state.mostrar_formulari_br = False
 
 if st.session_state.pantalla == 'dashboard':
-    
-    # Logo a dalt de tot de la pantalla de Big Rocks
-    try:
-        st.image("sorigue_logo_RGB-positivo.png", width=250)
-    except:
-        pass
+    st.write("<br>", unsafe_allow_html=True)
+    try: st.image("sorigue_logo_RGB-positivo.png", width=250)
+    except: pass
         
     col_titol, col_boto = st.columns([3, 1])
-    with col_titol:
-        st.title(f"🪨 Dashboard - {MES}")
+    with col_titol: st.title(f"🪨 Dashboard - {MES}")
     with col_boto:
         st.write("<br>", unsafe_allow_html=True)
         if not es_tancat:
-            st.button("📊 Avaluar i Tancar Mes", type="primary", use_container_width=True, on_click=lambda: st.session_state.update(pantalla='resum'))
+            st.button(t('eval_close'), type="primary", use_container_width=True, on_click=lambda: st.session_state.update(pantalla='resum'))
     st.markdown("---")
 
     brs = fetch_query("SELECT id, nom, persones, reunions, notes_progres, pregunta, passos FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
 
     if not brs:
-        st.info("No hi ha cap Big Rock. Afegeix-ne de noves a sota.")
+        st.info(t('no_br'))
     else:
         for br in brs:
             br_id = br[0]
             with st.container():
                 st.markdown(f"## 🎯 {br[1]}")
-                st.caption(f"👥 **Persones clau:** {br[2]} | 📅 **Reunions:** {br[3]}")
+                st.caption(f"{t('key_ppl')} {br[2]} | {t('key_meet')} {br[3]}")
                 
                 tars = fetch_query("SELECT id, num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu'", (br_id,))
                 progres_mitja = int(sum(t[3] for t in tars) / len(tars)) if tars else 0
-                
-                # Barra global de la Big Rock amb escala de colors i text integrat
                 progress_bar_colorida(progres_mitja, is_global=True)
                 
                 for tar in tars:
                     tar_id, num, desc, progres = tar
-                    # Forcem que el progress només sigui 0, 50 o 100 per si hi ha dades velles
                     if progres not in [0, 50, 100]: progres = 0
                     
-                    # Estructura de columnes actualitzada: 
-                    # Col1: TAR X | Col2: Descripció | Col3: Selector 0/50/100 | Col4: Barra Visual | Col5: Paperera
                     col1, col2, col3, col4, col5 = st.columns([1, 4, 3, 2, 1])
-                    
-                    with col1: 
-                        st.write(f"**{num}**")
+                    with col1: st.write(f"**{num}**")
                     with col2:
                         k_desc = f"desc_{tar_id}"
-                        st.text_input("Desc", value=desc, key=k_desc, label_visibility="collapsed", disabled=es_tancat,
-                                      on_change=actualitzar_text_tar_cb, args=(tar_id, k_desc))
+                        st.text_input(t('desc'), value=desc, key=k_desc, label_visibility="collapsed", disabled=es_tancat,
+                                      on_change=lambda tid=tar_id, k=k_desc: update_db_val("tars", "descripcio", st.session_state[k], tid))
                     with col3:
                         k_radio = f"radio_{tar_id}"
-                        st.radio("Estat", options=[0, 50, 100], format_func=lambda x: f"{x}%", 
+                        st.radio(t('state'), options=[0, 50, 100], format_func=lambda x: f"{x}%", 
                                  index=[0, 50, 100].index(progres), horizontal=True, key=k_radio, 
                                  label_visibility="collapsed", disabled=es_tancat,
-                                 on_change=actualitzar_progres_tar_cb, args=(tar_id, k_radio))
-                    with col4:
-                        # La barra visual maca al costat mateix del selector
-                        progress_bar_colorida(progres, is_global=False)
-                    with col5:
-                        st.button("🗑️", key=f"btn_{tar_id}", on_click=arxivar_tar, args=(tar_id,), disabled=es_tancat)
+                                 on_change=lambda tid=tar_id, k=k_radio: update_db_val("tars", "progres", st.session_state[k], tid))
+                    with col4: progress_bar_colorida(progres, is_global=False)
+                    with col5: st.button("🗑️", key=f"btn_{tar_id}", on_click=arxivar_tar, args=(tar_id,), disabled=es_tancat)
                 
-                with st.expander("📝 Detalls, Preguntes i Pròxims Passos", expanded=False):
-                    notes = st.text_area("Progreso:", value=br[4], key=f"notes_{br_id}", disabled=es_tancat)
-                    preg = st.text_input("Pregunta o necesidad:", value=br[5], key=f"preg_{br_id}", disabled=es_tancat)
-                    passos = st.text_input("Próximos pasos:", value=br[6], key=f"passos_{br_id}", disabled=es_tancat)
+                with st.expander(t('details'), expanded=False):
+                    notes = st.text_area(t('prog'), value=br[4], key=f"notes_{br_id}", disabled=es_tancat)
+                    preg = st.text_input(t('need'), value=br[5], key=f"preg_{br_id}", disabled=es_tancat)
+                    passos = st.text_input(t('next_steps'), value=br[6], key=f"passos_{br_id}", disabled=es_tancat)
                     if not es_tancat:
-                        st.button("💾 Guardar Notes", key=f"save_{br_id}", type="primary", on_click=actualitzar_notes_br, args=(br_id, notes, preg, passos))
-                
+                        st.button(t('save_notes'), key=f"save_{br_id}", type="primary", on_click=lambda bid=br_id, n=notes, p=preg, ps=passos: run_query("UPDATE big_rocks SET notes_progres=?, pregunta=?, passos=? WHERE id=?", (n, p, ps, bid)))
                 st.write("<br>", unsafe_allow_html=True)
 
     if not es_tancat:
         st.markdown("---")
-        if st.button("➕ Crear Nova Big Rock", type="primary"):
+        if st.button(t('create_br'), type="primary"):
             st.session_state.mostrar_formulari_br = not st.session_state.mostrar_formulari_br
 
         if st.session_state.mostrar_formulari_br:
             with st.form("form_nova_br"):
-                st.subheader("Configura la teva nova Big Rock")
-                nou_nom = st.text_input("Títol de la Big Rock")
+                st.subheader(t('config_br'))
+                nou_nom = st.text_input(t('title_br'))
                 c1, c2 = st.columns(2)
-                persones = c1.text_input("Persones clau")
-                reunions = c2.text_input("Reunions clau")
+                persones = c1.text_input(t('key_ppl').replace('*', '').strip())
+                reunions = c2.text_input(t('key_meet').replace('*', '').strip())
                 st.markdown("#### TARs")
                 t1, t2, t3, t4 = st.text_input("TAR 1"), st.text_input("TAR 2"), st.text_input("TAR 3"), st.text_input("TAR 4")
                 
-                if st.form_submit_button("Guardar", type="primary"):
+                if st.form_submit_button(t('save'), type="primary"):
                     if nou_nom:
                         c = run_query("INSERT INTO big_rocks (username, mes, nom, persones, reunions, notes_progres, pregunta, passos) VALUES (?, ?, ?, ?, ?, '', '', '')", (USUARI, MES, nou_nom, persones, reunions))
                         for i, desc_tar in enumerate([t1, t2, t3, t4]):
@@ -265,15 +312,13 @@ if st.session_state.pantalla == 'dashboard':
                         st.rerun()
 
 # ==========================================
-# 5. PANTALLA DE RESUM (TANCAMENT)
+# 7. PANTALLA DE RESUM (TANCAMENT)
 # ==========================================
 elif st.session_state.pantalla == 'resum':
-    try:
-        st.image("sorigue_logo_RGB-positivo.png", width=250)
-    except:
-        pass
+    try: st.image("sorigue_logo_RGB-positivo.png", width=250)
+    except: pass
         
-    st.title(f"📊 Resum de Tancament - {MES}")
+    st.title(f"{t('summary')} - {MES}")
     
     brs = fetch_query("SELECT id, nom, persones, reunions FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
     tars_completats, tars_pendents = [], []
@@ -281,39 +326,47 @@ elif st.session_state.pantalla == 'resum':
     
     for br in brs:
         tars = fetch_query("SELECT descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu'", (br[0],))
-        for t in tars:
-            sumatori_progres += t[1]
+        for t_val in tars:
+            sumatori_progres += t_val[1]
             total_tars += 1
-            if t[1] == 100: tars_completats.append(f"{br[1]} ➡️ {t[0]}")
-            else: tars_pendents.append(f"{br[1]} ➡️ {t[0]} ({t[1]}%)")
+            if t_val[1] == 100: tars_completats.append(f"{br[1]} ➡️ {t_val[0]}")
+            else: tars_pendents.append(f"{br[1]} ➡️ {t_val[0]} ({t_val[1]}%)")
     
     compliment_global = int(sumatori_progres / total_tars) if total_tars > 0 else 0
     
+    st.markdown(f"### {t('global_comp')}")
     progress_bar_colorida(compliment_global, is_global=True)
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.markdown("---")
     ce, ct = st.columns(2)
     with ce:
-        st.success(f"#### ✅ Èxits (100%)")
-        for t in tars_completats: st.write(f"- {t}")
+        st.success(t('successes'))
+        for t_val in tars_completats: st.write(f"- {t_val}")
     with ct:
-        st.warning(f"#### 🔄 Es traspassen")
-        for t in tars_pendents: st.write(f"- {t}")
+        st.warning(t('carry_over'))
+        for t_val in tars_pendents: st.write(f"- {t_val}")
     st.markdown("---")
 
     def confirmar_tancament():
         run_query("INSERT OR IGNORE INTO mesos_tancats (username, mes) VALUES (?, ?)", (USUARI, MES))
         
-        mesos = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"]
+        mesos_idioma = t('months')
         parts = MES.split(" ")
         mes_actual_nom, any_actual = parts[0], int(parts[1])
-        if mes_actual_nom in mesos:
-            idx = mesos.index(mes_actual_nom)
-            if idx == 11: nou_mes = f"Gener {any_actual + 1}"
-            else: nou_mes = f"{mesos[idx+1]} {any_actual}"
+        
+        # Intentem buscar quin mes és per sumar 1, evitant errors si canvien el nom a mà
+        idx = -1
+        for idi in ['ca', 'es']:
+            if mes_actual_nom in TRANS[idi]['months']:
+                idx = TRANS[idi]['months'].index(mes_actual_nom)
+                break
+                
+        if idx != -1:
+            if idx == 11: nou_mes = f"{mesos_idioma[0]} {any_actual + 1}"
+            else: nou_mes = f"{mesos_idioma[idx+1]} {any_actual}"
         else:
-            nou_mes = f"Mes_Següent {any_actual}"
+            nou_mes = f"Next {any_actual}"
             
         brs_actuals = fetch_query("SELECT id, nom, persones, reunions FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
         for br in brs_actuals:
@@ -328,6 +381,6 @@ elif st.session_state.pantalla == 'resum':
 
     cb1, cb2 = st.columns(2)
     with cb1:
-        st.button("⬅️ Cancel·lar", on_click=lambda: st.session_state.update(pantalla='dashboard'))
+        st.button(t('cancel'), on_click=lambda: st.session_state.update(pantalla='dashboard'))
     with cb2:
-        st.button("🔒 Confirmar Tancament i Crear Mes Següent", on_click=confirmar_tancament, type="primary", use_container_width=True)
+        st.button(t('confirm_close'), on_click=confirmar_tancament, type="primary", use_container_width=True)
