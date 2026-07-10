@@ -1,100 +1,109 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Configuració de la pàgina
 st.set_page_config(page_title="Sistema Big Rocks", layout="wide", page_icon="🪨")
 
 st.title("🪨 Dashboard Big Rocks")
 st.subheader("Juliol 2026")
 
-# 2. Inicialització de dades simulades (La teva futura Base de Dades)
-if 'tars' not in st.session_state:
-    st.session_state.tars = [
-        {"id": 1, "big_rock": "FACTURAR ABANS DE VACANCES", "tasca": "Bimsa - Via Favència", "progres": 40, "estat": "Actiu"},
-        {"id": 2, "big_rock": "FACTURAR ABANS DE VACANCES", "tasca": "Aura", "progres": 100, "estat": "Actiu"},
-        {"id": 3, "big_rock": "REVISAR GEOS", "tasca": "AMB Hotel Entitats", "progres": 10, "estat": "Actiu"},
-        {"id": 4, "big_rock": "REVISAR GEOS", "tasca": "Engestur Montcada", "progres": 80, "estat": "Actiu"}
+# 1. Base de dades inicial basada en el teu Excel "Big Rocks - Marc Llopis - Julio 2026.xlsx"
+if 'big_rocks' not in st.session_state:
+    st.session_state.big_rocks = [
+        {
+            "id": 1,
+            "nom": "FACTURAR ABANS DE VACANCES",
+            "persones": "Coordinadors",
+            "reunions": "Coordinadors",
+            "tars": [
+                {"id_tar": 11, "num": "TAR 1", "desc": "Bimsa - Via Favència (277k€)", "progres": 40, "estat": "Actiu"},
+                {"id_tar": 12, "num": "TAR 2", "desc": "Aura (141k€)", "progres": 100, "estat": "Actiu"},
+                {"id_tar": 13, "num": "TAR 3", "desc": "Bimsa - Xavier Benguerel (66k€)", "progres": 0, "estat": "Actiu"},
+                {"id_tar": 14, "num": "TAR 4", "desc": "Bimsa - Locals Entença (23k€)", "progres": 0, "estat": "Actiu"}
+            ],
+            "notes_progres": "He hecho reuniones con todos los implicados (Eloi, Marisol,...)",
+            "pregunta": "Necesitamos un técnico responsable de RRHH central...",
+            "passos": "Definir fechas y formaciones de operarios 2026."
+        },
+        {
+            "id": 2,
+            "nom": "REVISAR GEOS",
+            "persones": "Montse + David D.",
+            "reunions": "Montse + David D.",
+            "tars": [
+                {"id_tar": 21, "num": "TAR 1", "desc": "AMB Hotel Entitats", "progres": 30, "estat": "Actiu"},
+                {"id_tar": 22, "num": "TAR 2", "desc": "Engestur Montcada", "progres": 10, "estat": "Actiu"},
+                {"id_tar": 23, "num": "TAR 3", "desc": "Palamós", "progres": 0, "estat": "Actiu"}
+            ],
+            "notes_progres": "He hecho reuniones con todos los implicados...",
+            "pregunta": "Preguntar a Paco sobre como está la incorporación...",
+            "passos": "Programar 2das reuniones para concretar los avances."
+        }
     ]
 
 # Funció per arxivar un TAR
-def arxivar_tar(tar_id):
-    for tar in st.session_state.tars:
-        if tar['id'] == tar_id:
-            tar['estat'] = "Arxivat"
+def arxivar_tar(br_id, tar_id):
+    for br in st.session_state.big_rocks:
+        if br['id'] == br_id:
+            for tar in br['tars']:
+                if tar['id_tar'] == tar_id:
+                    tar['estat'] = "Arxivat"
 
-# 3. Visualització de les Big Rocks (Les Targetes)
-tars_actius = [tar for tar in st.session_state.tars if tar['estat'] == "Actiu"]
-df_tars = pd.DataFrame(tars_actius)
-
-if not df_tars.empty:
-    big_rocks_uniques = df_tars['big_rock'].unique()
-
-    for br in big_rocks_uniques:
-        # Creem una "targeta" visual per a cada Big Rock
-        with st.container():
-            st.markdown(f"### 🎯 {br}")
-            st.markdown("---")
+# 2. Mostrar les Big Rocks a la pantalla
+for br in st.session_state.big_rocks:
+    with st.container():
+        st.markdown(f"## 🎯 {br['nom']}")
+        st.caption(f"👥 **Persones clau:** {br['persones']} | 📅 **Reunions:** {br['reunions']}")
+        
+        # Càlcul del progrés global de la Big Rock
+        tars_actius = [t for t in br['tars'] if t['estat'] == 'Actiu']
+        progres_mitja = int(sum(t['progres'] for t in tars_actius) / len(tars_actius)) if tars_actius else 0
+        
+        st.progress(progres_mitja / 100, text=f"Avenç global de la Big Rock: {progres_mitja}%")
+        st.markdown("---")
+        
+        # Llistat dels TARs 1, 2, 3 i 4
+        for tar in tars_actius:
+            col1, col2, col3, col4 = st.columns([1, 4, 3, 1])
             
-            tars_br = df_tars[df_tars['big_rock'] == br]
+            with col1:
+                st.write(f"**{tar['num']}**")
             
-            for index, row in tars_br.iterrows():
-                col1, col2, col3, col4 = st.columns([4, 4, 1, 1])
-                
-                with col1:
-                    st.write(f"**{row['tasca']}**")
-                
-                with col2:
-                    # Slider per controlar l'avenç
-                    nou_progres = st.slider(
-                        "Progrés", 
-                        min_value=0, max_value=100, 
-                        value=row['progres'], 
-                        step=10, 
-                        key=f"slider_{row['id']}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    # Actualitzem el progrés a la memòria
-                    for tar in st.session_state.tars:
-                        if tar['id'] == row['id']:
-                            tar['progres'] = nou_progres
-                
-                with col3:
-                    # Indicador visual de colors mitjançant emojis
-                    if nou_progres == 100:
-                        st.success("Completat ✅")
-                    elif nou_progres >= 70:
-                        st.info("Avançant 🟡")
-                    else:
-                        st.error("Aturat 🔴")
-                
-                with col4:
-                    # Botó d'arxivar (s'esborra visualment)
-                    st.button("🗑️ Arxivar", key=f"btn_{row['id']}", on_click=arxivar_tar, args=(row['id'],))
+            with col2:
+                # Camp de text per escriure en què consisteix el TAR (es pot editar al moment)
+                tar['desc'] = st.text_input("Descripció del TAR", value=tar['desc'], key=f"desc_{tar['id_tar']}", label_visibility="collapsed")
             
-            # Espai per a notes
-            st.text_input("Preguntes o Necessitats:", key=f"preg_{br}")
-            st.text_input("Pròxims Passos:", key=f"passos_{br}")
-            st.write("") # Espaiat
-else:
-    st.info("No hi ha cap Big Rock activa aquest mes.")
+            with col3:
+                # Slider per marcar l'avenç del TAR concret
+                tar['progres'] = st.slider(
+                    "Progrés TAR", 
+                    min_value=0, max_value=100, 
+                    value=tar['progres'], 
+                    step=10, 
+                    key=f"slider_{tar['id_tar']}",
+                    label_visibility="collapsed"
+                )
+            
+            with col4:
+                st.button("🗑️", key=f"btn_{tar['id_tar']}", on_click=arxivar_tar, args=(br['id'], tar['id_tar'],), help="Arxivar aquest TAR")
+        
+        # Camps finals de l'Excel
+        with st.expander("📝 Detalls, Preguntes i Pròxims Passos", expanded=True):
+            br['notes_progres'] = st.text_area("Progreso en esta Big Rock:", value=br['notes_progres'], key=f"prog_text_{br['id']}")
+            br['pregunta'] = st.text_input("Pregunta o necesidad:", value=br['pregunta'], key=f"preg_{br['id']}")
+            br['passos'] = st.text_input("Próximos pasos:", value=br['passos'], key=f"passos_{br['id']}")
+        
+        st.write("<br><br>", unsafe_allow_html=True)
 
-# 4. Lògica de Tancament de Mes
-st.sidebar.title("Accions de Mes")
-st.sidebar.markdown("Quan acabi el mes, fes clic aquí per traspassar.")
-
-if st.sidebar.button("Avaluar i Tancar Mes", type="primary"):
+# 3. Sidebar per Tancar el Mes
+st.sidebar.title("Accions")
+if st.sidebar.button("Avaluar i Tancar Mes", type="primary", use_container_width=True):
     st.sidebar.markdown("### Resum del traspàs a Agost:")
-    tars_a_traspassar = []
-    
-    for tar in st.session_state.tars:
-        if tar['estat'] == "Actiu":
-            if tar['progres'] == 100:
-                st.sidebar.write(f"✅ {tar['tasca']} (No es traspassa)")
-            else:
-                st.sidebar.write(f"➡️ {tar['tasca']} (Es traspassa al {tar['progres']}%)")
-                tars_a_traspassar.append(tar)
+    for br in st.session_state.big_rocks:
+        tars_pendents = [t for t in br['tars'] if t['estat'] == 'Actiu' and t['progres'] < 100]
+        if tars_pendents:
+            st.sidebar.write(f"**{br['nom']}**")
+            for t in tars_pendents:
+                st.sidebar.write(f" - {t['num']}: {t['desc']} (Passa al {t['progres']}%)")
     
     if st.sidebar.button("Crear Agost 2026"):
-        # Aquí aniria la connexió a la base de dades per guardar el nou mes
-        st.toast('Mes d\'Agost creat amb èxit!', icon='🚀')
+        st.sidebar.success("Mes creat! (Això es connectarà a la teva BD)")
