@@ -9,25 +9,43 @@ st.set_page_config(page_title="Big Rocks - Sorigué", layout="wide", page_icon="
 
 st.markdown("""
     <style>
-    /* Amagar elements per defecte SENSE carregar-nos el botó d'obrir la barra lateral */
-    #MainMenu {visibility: hidden;}
-    [data-testid="stToolbar"] {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* 1. AMAGAR ELEMENTS DE STREAMLIT (SENSE TREURE EL BOTÓ D'OBRIR LA BARRA) */
     
-    /* Fem la capçalera transparent perquè no molesti, però la mantenim activa per al botó '>' */
-    header {background-color: transparent !important;}
+    /* Amagar el menú d'opcions de la dreta (tres ratlles) */
+    [data-testid="stHeader"] .st-emotion-cache-18ni7ap {
+        display: none !important;
+    }
+    
+    /* Amagar el botó de "Manage app" (Github) si existeix */
+    .st-emotion-cache-16idej2 {
+        display: none !important;
+    }
+
+    /* Amagar el peu de pàgina "Made with Streamlit" */
+    footer {visibility: hidden;}
+
+    /* Fer el fons de la capçalera transparent */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
+    }
+
+    /* FORÇAR EL BOTÓ D'OBRIR LA BARRA LATERAL A SER NEGRE I VISIBLE */
+    button[kind="header"] svg {
+        fill: #000000 !important;
+        stroke: #000000 !important;
+    }
 
     /* Fons general suau per fer destacar les targetes blanques */
     .stApp {
         background-color: #f8f9fa;
     }
 
-    /* 1. BARRA LATERAL BLAU CORPORATIU */
+    /* 2. BARRA LATERAL BLAU CORPORATIU */
     [data-testid="stSidebar"] {
         background-color: #009FE3 !important;
     }
     
-    /* Text blanc a la barra lateral (Específic per no afectar el botó d'obrir que queda fora) */
+    /* Text blanc a la barra lateral (Específic per no afectar elements externs) */
     [data-testid="stSidebar"] label, 
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span,
@@ -63,7 +81,7 @@ st.markdown("""
         color: #333 !important;
     }
 
-    /* 2. DISSENY TARGETES (CARDS) PER A LES BIG ROCKS */
+    /* 3. DISSENY TARGETES (CARDS) PER A LES BIG ROCKS */
     div[data-testid="stVerticalBlock"] > div > div > div[data-testid="stVerticalBlock"] {
         background-color: white;
         border-radius: 12px;
@@ -144,6 +162,7 @@ TRANS = {
     'ca': {
         'login_title': "Accés a la Plataforma", 'login_tab': "Iniciar Sessió", 'reg_tab': "Registrar Nou Usuari",
         'usr': "Nom d'usuari", 'pwd': "Contrasenya", 'new_usr': "Nou nom d'usuari",
+        'lang_reg': "Idioma per defecte",
         'enter': "Entrar", 'register': "Registrar",
         'err_login': "Usuari o contrasenya incorrectes.",
         'succ_reg': "Usuari creat correctament! Ara pots iniciar sessió.",
@@ -167,6 +186,7 @@ TRANS = {
     'es': {
         'login_title': "Acceso a la Plataforma", 'login_tab': "Iniciar Sesión", 'reg_tab': "Registrar Nuevo Usuario",
         'usr': "Nombre de usuario", 'pwd': "Contraseña", 'new_usr': "Nuevo nombre de usuario",
+        'lang_reg': "Idioma por defecto",
         'enter': "Entrar", 'register': "Registrar",
         'err_login': "Usuario o contraseña incorrectos.",
         'succ_reg': "¡Usuario creado correctamente! Ahora puedes iniciar sesión.",
@@ -267,6 +287,7 @@ if st.session_state.usuari_actual is None:
         try: st.image("sorigue_logo_RGB-positivo.png", width=250)
         except: st.title("Sorigué")
         
+        # Assegurem que el títol del login sempre estigui en el seu idioma preferit
         st.write("### ", t('login_title'))
         tab1, tab2 = st.tabs([t('login_tab'), t('reg_tab')])
         
@@ -288,9 +309,13 @@ if st.session_state.usuari_actual is None:
             with st.form("register_form"):
                 nou_usuari = st.text_input(t('new_usr'))
                 nova_contra = st.text_input(t('pwd'), type="password")
+                
+                # Afegim el selector d'idioma en el moment del registre
+                nou_idioma = st.selectbox("Idioma / Language", options=["ca", "es"], format_func=lambda x: "Català" if x == "ca" else "Español")
+                
                 if st.form_submit_button(t('register'), type="primary", use_container_width=True):
                     try:
-                        run_query("INSERT INTO usuaris (username, password, language) VALUES (?, ?, 'ca')", (nou_usuari, nova_contra))
+                        run_query("INSERT INTO usuaris (username, password, language) VALUES (?, ?, ?)", (nou_usuari, nova_contra, nou_idioma))
                         st.success(t('succ_reg'))
                     except sqlite3.IntegrityError:
                         st.error(t('err_reg'))
