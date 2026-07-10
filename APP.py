@@ -333,7 +333,7 @@ st.sidebar.write(f"👤 {t('conn_as')} **{USUARI}**")
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
 lang_idx = 0 if st.session_state.idioma == 'ca' else 1
-idioma_triat = st.sidebar.selectbox(t('lang'), ['ca', 'es'], index=lang_idx, format_func=lambda x: "Català" if x=='ca' else "Castellano", key="idioma_selector", on_change=canviar_idioma)
+idioma_triat = st.sidebar.selectbox(t('lang'), ['ca', 'es'], index=lang_idx, format_func=lambda x: "Català" if x=='ca' else "Español", key="idioma_selector", on_change=canviar_idioma)
 st.session_state.idioma = idioma_triat
 
 mesos_disponibles = [row[0] for row in fetch_query("SELECT DISTINCT mes FROM big_rocks WHERE username=?", (USUARI,))]
