@@ -9,13 +9,15 @@ st.set_page_config(page_title="Big Rocks - Sorigué", layout="wide", page_icon="
 
 st.markdown("""
     <style>
-    /* Amagar elements per defecte */
+    /* Amagar elements per defecte SENSE carregar-nos el botó d'obrir la barra lateral */
     #MainMenu {visibility: hidden;}
     [data-testid="stToolbar"] {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    
+    /* Fem la capçalera transparent perquè no molesti, però la mantenim activa per al botó '>' */
+    header {background-color: transparent !important;}
 
-    /* Fons general suau per fer destacar les targetes */
+    /* Fons general suau per fer destacar les targetes blanques */
     .stApp {
         background-color: #f8f9fa;
     }
@@ -25,16 +27,12 @@ st.markdown("""
         background-color: #009FE3 !important;
     }
     
-    /* Text blanc a la barra lateral (Específic per no afectar el botó d'obrir) */
-    [data-testid="stSidebar"] .css-17lntkn, 
+    /* Text blanc a la barra lateral (Específic per no afectar el botó d'obrir que queda fora) */
     [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] p {
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] h1 {
         color: white !important;
-    }
-
-    /* Assegurar que la icona d'obrir la barra sigui visible (gris/negre) */
-    button[kind="header"] {
-        color: #333 !important;
     }
 
     /* Convertir el logotip a blanc a la barra lateral */
@@ -55,7 +53,7 @@ st.markdown("""
         background-color: rgba(255, 255, 255, 0.25) !important;
     }
 
-    /* Selectors a la barra */
+    /* Excepcions a la barra: fons blanc per als selectors de mes/idioma i text fosc a dins */
     [data-testid="stSidebar"] div[data-baseweb="select"] > div {
         background-color: white !important;
         border-radius: 6px;
@@ -96,7 +94,7 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0, 159, 227, 0.3);
     }
 
-    /* Botó d'esborrar */
+    /* Botó d'esborrar (Paperera) */
     button[key^="btn_"] {
         border-radius: 50% !important;
         width: 40px !important;
@@ -115,15 +113,21 @@ st.markdown("""
         color: #ff4b4b !important;
     }
 
-    /* Inputs més nets */
+    /* Inputs més nets i amb text fosc sempre */
     input {
         border-radius: 6px !important;
         border: 1px solid #ddd !important;
         background-color: #fafafa !important;
+        color: #333 !important;
     }
     input:focus {
         border-color: #009FE3 !important;
         box-shadow: 0 0 0 1px #009FE3 !important;
+    }
+
+    /* Text areas i altres components de text */
+    textarea {
+        color: #333 !important;
     }
 
     /* Radio buttons centrats */
@@ -257,7 +261,6 @@ def canviar_idioma(): run_query("UPDATE usuaris SET language=? WHERE username=?"
 if 'usuari_actual' not in st.session_state: st.session_state.usuari_actual = None
 
 if st.session_state.usuari_actual is None:
-    # Contenidor centrat per al login
     st.write("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -358,7 +361,6 @@ if st.session_state.pantalla == 'dashboard':
     else:
         for br in brs:
             br_id = br[0]
-            # Aquest contenidor ara adoptarà l'estil "Targeta Blanca" gràcies al CSS
             with st.container():
                 st.markdown(f"## {br[1]}")
                 st.caption(f"{t('key_ppl')} {br[2]} &nbsp;&nbsp;|&nbsp;&nbsp; {t('key_meet')} {br[3]}")
@@ -367,7 +369,7 @@ if st.session_state.pantalla == 'dashboard':
                 progres_mitja = int(sum(t[3] for t in tars) / len(tars)) if tars else 0
                 
                 progress_bar_colorida(progres_mitja, is_global=True)
-                st.write("") # Espaiat
+                st.write("") 
                 
                 for tar in tars:
                     tar_id, num, desc, progres = tar
