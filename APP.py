@@ -1,169 +1,227 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
-import random
 
 st.set_page_config(page_title="Sistema Big Rocks", layout="wide", page_icon="🪨")
 
-# 1. Variables d'estat inicials
-if 'mes_actual' not in st.session_state:
-    st.session_state.mes_actual = "Juliol 2026"
+# ==========================================
+# 1. CONFIGURACIÓ DE LA BASE DE DADES (SQLite)
+# ==========================================
+def init_db():
+    conn = sqlite3.connect('bigrocks.db')
+    c = conn.cursor()
+    # Taula d'usuaris
+    c.execute('''CREATE TABLE IF NOT EXISTS usuaris (
+                    username TEXT PRIMARY KEY, 
+                    password TEXT)''')
+    # Taula de Big Rocks
+    c.execute('''CREATE TABLE IF NOT EXISTS big_rocks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT,
+                    mes TEXT,
+                    nom TEXT,
+                    persones TEXT,
+                    reunions TEXT,
+                    notes_progres TEXT,
+                    pregunta TEXT,
+                    passos TEXT)''')
+    # Taula de TARs
+    c.execute('''CREATE TABLE IF NOT EXISTS tars (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id_br INTEGER,
+                    num TEXT,
+                    descripcio TEXT,
+                    progres INTEGER,
+                    estat TEXT,
+                    FOREIGN KEY(id_br) REFERENCES big_rocks(id))''')
+    conn.commit()
+    conn.close()
 
-# Aquesta variable controlarà si estem veient el Dashboard o la Pantalla de Resum
+init_db()
+
+# --- Funcions auxiliars de BD ---
+def run_query(query, params=()):
+    conn = sqlite3.connect('bigrocks.db')
+    c = conn.cursor()
+    c.execute(query, params)
+    conn.commit()
+    return c
+
+def fetch_query(query, params=()):
+    conn = sqlite3.connect('bigrocks.db')
+    c = conn.cursor()
+    c.execute(query, params)
+    data = c.fetchall()
+    conn.close()
+    return data
+
+# ==========================================
+# 2. SISTEMA DE LOGIN I REGISTRE
+# ==========================================
+if 'usuari_actual' not in st.session_state:
+    st.session_state.usuari_actual = None
+
+if st.session_state.usuari_actual is None:
+    st.title("🔐 Accés a la Plataforma Big Rocks")
+    
+    tab1, tab2 = st.tabs(["Iniciar Sessió", "Registrar Nou Usuari"])
+    
+    with tab1:
+        with st.form("login_form"):
+            usuari = st.text_input("Nom d'usuari")
+            contrasenya = st.text_input("Contrasenya", type="password")
+            submit = st.form_submit_button("Entrar")
+            
+            if submit:
+                result = fetch_query("SELECT * FROM usuaris WHERE username=? AND password=?", (usuari, contrasenya))
+                if result:
+                    st.session_state.usuari_actual = usuari
+                    st.session_state.mes_actual = "Juliol 2026" # Mes per defecte en iniciar sessió
+                    st.session_state.pantalla = 'dashboard'
+                    st.rerun()
+                else:
+                    st.error("Usuari o contrasenya incorrectes.")
+                    
+    with tab2:
+        with st.form("register_form"):
+            nou_usuari = st.text_input("Nou nom d'usuari")
+            nova_contra = st.text_input("Contrasenya", type="password")
+            submit_reg = st.form_submit_button("Registrar")
+            
+            if submit_reg:
+                try:
+                    run_query("INSERT INTO usuaris (username, password) VALUES (?, ?)", (nou_usuari, nova_contra))
+                    st.success("Usuari creat correctament! Ara pots iniciar sessió.")
+                except sqlite3.IntegrityError:
+                    st.error("Aquest nom d'usuari ja existeix.")
+    st.stop() # Atura l'execució aquí si no està loguejat
+
+# ==========================================
+# 3. LÒGICA DE DADES DE L'USUARI
+# ==========================================
+# Variables de navegació
 if 'pantalla' not in st.session_state:
     st.session_state.pantalla = 'dashboard'
-
 if 'mostrar_formulari_br' not in st.session_state:
     st.session_state.mostrar_formulari_br = False
 
-if 'big_rocks' not in st.session_state:
-    st.session_state.big_rocks = [
-        {
-            "id": 1,
-            "nom": "FACTURAR ABANS DE VACANCES",
-            "persones": "Coordinadors",
-            "reunions": "Coordinadors",
-            "tars": [
-                {"id_tar": 11, "num": "TAR 1", "desc": "Bimsa - Via Favència (277k€)", "progres": 40, "estat": "Actiu"},
-                {"id_tar": 12, "num": "TAR 2", "desc": "Aura (141k€)", "progres": 100, "estat": "Actiu"},
-                {"id_tar": 13, "num": "TAR 3", "desc": "Bimsa - Xavier Benguerel (66k€)", "progres": 0, "estat": "Actiu"},
-                {"id_tar": 14, "num": "TAR 4", "desc": "Bimsa - Locals Entença (23k€)", "progres": 0, "estat": "Actiu"}
-            ],
-            "notes_progres": "He hecho reuniones con todos los implicados (Eloi, Marisol,...)",
-            "pregunta": "Necesitamos un técnico responsable de RRHH central...",
-            "passos": "Definir fechas y formaciones de operarios 2026."
-        },
-        {
-            "id": 2,
-            "nom": "REVISAR GEOS",
-            "persones": "Montse + David D.",
-            "reunions": "Montse + David D.",
-            "tars": [
-                {"id_tar": 21, "num": "TAR 1", "desc": "AMB Hotel Entitats", "progres": 30, "estat": "Actiu"},
-                {"id_tar": 22, "num": "TAR 2", "desc": "Engestur Montcada", "progres": 10, "estat": "Actiu"},
-                {"id_tar": 23, "num": "TAR 3", "desc": "Palamós", "progres": 0, "estat": "Actiu"}
-            ],
-            "notes_progres": "He hecho reuniones con todos los implicados...",
-            "pregunta": "Preguntar a Paco sobre como está la incorporación...",
-            "passos": "Programar 2das reuniones para concretar los avances."
-        }
-    ]
+USUARI = st.session_state.usuari_actual
+MES = st.session_state.mes_actual
 
-# --- FUNCIONS DE LÒGICA ---
+st.sidebar.write(f"👤 Connectat com: **{USUARI}**")
+if st.sidebar.button("Tancar Sessió"):
+    st.session_state.usuari_actual = None
+    st.rerun()
 
-def arxivar_tar(br_id, tar_id):
-    for br in st.session_state.big_rocks:
-        if br['id'] == br_id:
-            for tar in br['tars']:
-                if tar['id_tar'] == tar_id:
-                    tar['estat'] = "Arxivat"
+st.sidebar.markdown("---")
 
-def executar_traspas():
-    noves_big_rocks = []
-    
-    for br in st.session_state.big_rocks:
-        tars_pendents = [t for t in br['tars'] if t['estat'] == 'Actiu' and t['progres'] < 100]
-        
-        if tars_pendents:
-            nova_br = br.copy()
-            nova_br['tars'] = tars_pendents
-            nova_br['notes_progres'] = "" 
-            nova_br['pregunta'] = ""
-            nova_br['passos'] = ""
-            noves_big_rocks.append(nova_br)
-            
-    st.session_state.big_rocks = noves_big_rocks
-    
-    if "Juliol" in st.session_state.mes_actual:
-        st.session_state.mes_actual = "Agost 2026"
-    else:
-        st.session_state.mes_actual = "Setembre 2026"
-        
-    st.session_state.pantalla = 'dashboard' # Tornem a la pantalla principal
+# Funcions d'interacció amb SQLite
+def actualitzar_progres_tar(id_tar, nou_progres):
+    run_query("UPDATE tars SET progres=? WHERE id=?", (nou_progres, id_tar))
 
-def anar_a_resum():
-    st.session_state.pantalla = 'resum'
+def actualitzar_text_tar(id_tar, nova_desc):
+    run_query("UPDATE tars SET descripcio=? WHERE id=?", (nova_desc, id_tar))
 
-def tornar_a_dashboard():
-    st.session_state.pantalla = 'dashboard'
+def arxivar_tar(id_tar):
+    run_query("UPDATE tars SET estat='Arxivat' WHERE id=?", (id_tar,))
 
-def afegir_nova_br(nom, persones, reunions, nom_tars):
-    nou_id = random.randint(100, 9999)
-    tars_nous = []
+def actualitzar_notes_br(id_br, notes, pregunta, passos):
+    run_query("UPDATE big_rocks SET notes_progres=?, pregunta=?, passos=? WHERE id=?", (notes, pregunta, passos, id_br))
+
+def crear_nova_br(nom, persones, reunions, nom_tars):
+    c = run_query("INSERT INTO big_rocks (username, mes, nom, persones, reunions, notes_progres, pregunta, passos) VALUES (?, ?, ?, ?, ?, '', '', '')", 
+                  (USUARI, MES, nom, persones, reunions))
+    nou_id_br = c.lastrowid
     
     for i, desc_tar in enumerate(nom_tars):
         if desc_tar.strip() != "":
-            tars_nous.append({
-                "id_tar": random.randint(10000, 99999), 
-                "num": f"TAR {i+1}", 
-                "desc": desc_tar, 
-                "progres": 0, 
-                "estat": "Actiu"
-            })
-            
-    nova_br = {
-        "id": nou_id,
-        "nom": nom,
-        "persones": persones,
-        "reunions": reunions,
-        "tars": tars_nous,
-        "notes_progres": "",
-        "pregunta": "",
-        "passos": ""
-    }
-    
-    st.session_state.big_rocks.append(nova_br)
-    st.session_state.mostrar_formulari_br = False
+            run_query("INSERT INTO tars (id_br, num, descripcio, progres, estat) VALUES (?, ?, ?, ?, ?)", 
+                      (nou_id_br, f"TAR {i+1}", desc_tar, 0, 'Actiu'))
 
+def tancar_mes_db():
+    # Definim quin serà el mes següent
+    nou_mes = "Agost 2026" if "Juliol" in MES else "Setembre 2026"
+    
+    # Obtenim les Big Rocks actuals
+    brs_actuals = fetch_query("SELECT id, nom, persones, reunions FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
+    
+    for br in brs_actuals:
+        id_br_antiga = br[0]
+        # Mirem quins TARs estan actius i no completats
+        tars_pendents = fetch_query("SELECT num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu' AND progres < 100", (id_br_antiga,))
+        
+        if tars_pendents:
+            # Creem la nova Big Rock clonada pel mes següent
+            c = run_query("INSERT INTO big_rocks (username, mes, nom, persones, reunions, notes_progres, pregunta, passos) VALUES (?, ?, ?, ?, ?, '', '', '')", 
+                          (USUARI, nou_mes, br[1], br[2], br[3]))
+            nou_id_br = c.lastrowid
+            
+            # Inserim els TARs pendents
+            for tar in tars_pendents:
+                run_query("INSERT INTO tars (id_br, num, descripcio, progres, estat) VALUES (?, ?, ?, ?, 'Actiu')", 
+                          (nou_id_br, tar[0], tar[1], tar[2]))
+                
+    st.session_state.mes_actual = nou_mes
+    st.session_state.pantalla = 'dashboard'
 
 # ==========================================
-# PANTALLA 1: DASHBOARD PRINCIPAL
+# 4. PANTALLA 1: DASHBOARD PRINCIPAL
 # ==========================================
 if st.session_state.pantalla == 'dashboard':
-    
     col_titol, col_boto = st.columns([3, 1])
     with col_titol:
         st.title("🪨 Dashboard Big Rocks")
-        st.subheader(st.session_state.mes_actual)
+        st.subheader(MES)
     with col_boto:
         st.write("<br>", unsafe_allow_html=True)
-        st.button("📊 Avaluar i Tancar Mes", type="primary", use_container_width=True, on_click=anar_a_resum)
-
+        st.button("📊 Avaluar i Tancar Mes", type="primary", use_container_width=True, on_click=lambda: st.session_state.update(pantalla='resum'))
     st.markdown("---")
 
-    if not st.session_state.big_rocks:
-        st.info("Totes les Big Rocks s'han completat! 🎉 Afegeix-ne de noves a sota.")
+    # Obtenir dades des de SQLite
+    brs = fetch_query("SELECT id, nom, persones, reunions, notes_progres, pregunta, passos FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
+
+    if not brs:
+        st.info("No hi ha cap Big Rock per a aquest mes. Afegeix-ne de noves a sota.")
     else:
-        for br in st.session_state.big_rocks:
+        for br in brs:
+            br_id = br[0]
             with st.container():
-                st.markdown(f"## 🎯 {br['nom']}")
-                st.caption(f"👥 **Persones clau:** {br['persones']} | 📅 **Reunions:** {br['reunions']}")
+                st.markdown(f"## 🎯 {br[1]}")
+                st.caption(f"👥 **Persones clau:** {br[2]} | 📅 **Reunions:** {br[3]}")
                 
-                tars_actius = [t for t in br['tars'] if t['estat'] == 'Actiu']
-                progres_mitja = int(sum(t['progres'] for t in tars_actius) / len(tars_actius)) if tars_actius else 0
+                # Obtenim els TARs actius
+                tars = fetch_query("SELECT id, num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu'", (br_id,))
                 
-                st.progress(progres_mitja / 100, text=f"Avenç global de la Big Rock: {progres_mitja}%")
+                progres_mitja = int(sum(t[3] for t in tars) / len(tars)) if tars else 0
+                st.progress(progres_mitja / 100, text=f"Avenç global: {progres_mitja}%")
                 st.markdown("---")
                 
-                for tar in tars_actius:
+                for tar in tars:
+                    tar_id, num, desc, progres = tar
                     col1, col2, col3, col4 = st.columns([1, 4, 3, 1])
-                    
                     with col1:
-                        st.write(f"**{tar['num']}**")
+                        st.write(f"**{num}**")
                     with col2:
-                        tar['desc'] = st.text_input("Descripció del TAR", value=tar['desc'], key=f"desc_{tar['id_tar']}", label_visibility="collapsed")
+                        # Guardar descripció automàticament (usant on_change)
+                        st.text_input("Desc", value=desc, key=f"desc_{tar_id}", label_visibility="collapsed", 
+                                      on_change=actualitzar_text_tar, args=(tar_id, st.session_state.get(f"desc_{tar_id}", desc)))
                     with col3:
-                        tar['progres'] = st.slider("Progrés TAR", min_value=0, max_value=100, value=tar['progres'], step=10, key=f"slider_{tar['id_tar']}", label_visibility="collapsed")
+                        # Guardar progrés automàticament
+                        st.slider("Progrés", min_value=0, max_value=100, value=progres, step=10, key=f"slider_{tar_id}", label_visibility="collapsed",
+                                  on_change=actualitzar_progres_tar, args=(tar_id, st.session_state.get(f"slider_{tar_id}", progres)))
                     with col4:
-                        st.button("🗑️", key=f"btn_{tar['id_tar']}", on_click=arxivar_tar, args=(br['id'], tar['id_tar'],), help="Arxivar aquest TAR")
+                        st.button("🗑️", key=f"btn_{tar_id}", on_click=arxivar_tar, args=(tar_id,))
                 
+                # Notes i seguiment
                 with st.expander("📝 Detalls, Preguntes i Pròxims Passos", expanded=False):
-                    br['notes_progres'] = st.text_area("Progreso en esta Big Rock:", value=br['notes_progres'], key=f"prog_text_{br['id']}")
-                    br['pregunta'] = st.text_input("Pregunta o necesidad:", value=br['pregunta'], key=f"preg_{br['id']}")
-                    br['passos'] = st.text_input("Próximos pasos:", value=br['passos'], key=f"passos_{br['id']}")
+                    notes = st.text_area("Progreso:", value=br[4], key=f"notes_{br_id}")
+                    preg = st.text_input("Pregunta o necesidad:", value=br[5], key=f"preg_{br_id}")
+                    passos = st.text_input("Próximos pasos:", value=br[6], key=f"passos_{br_id}")
+                    st.button("💾 Guardar Notes", key=f"save_{br_id}", on_click=actualitzar_notes_br, args=(br_id, notes, preg, passos))
                 
                 st.write("<br>", unsafe_allow_html=True)
 
-    # ZONA DE CREACIÓ DE NOVES BIG ROCKS
+    # CREAR NOVA BIG ROCK
     st.markdown("---")
     if st.button("➕ Crear Nova Big Rock"):
         st.session_state.mostrar_formulari_br = not st.session_state.mostrar_formulari_br
@@ -171,89 +229,57 @@ if st.session_state.pantalla == 'dashboard':
     if st.session_state.mostrar_formulari_br:
         with st.form("form_nova_br"):
             st.subheader("Configura la teva nova Big Rock")
+            nou_nom = st.text_input("Títol de la Big Rock")
+            c1, c2 = st.columns(2)
+            persones = c1.text_input("Persones clau")
+            reunions = c2.text_input("Reunions clau")
+            st.markdown("#### TARs")
+            t1, t2, t3, t4 = st.text_input("TAR 1"), st.text_input("TAR 2"), st.text_input("TAR 3"), st.text_input("TAR 4")
             
-            nou_nom = st.text_input("Títol de la Big Rock (Ex. DEPORTE Y MENTE SANA)")
-            col_pers, col_reunions = st.columns(2)
-            amb_persones = col_pers.text_input("Persones clau a prioritzar")
-            amb_reunions = col_reunions.text_input("Reunions clau a prioritzar")
-            
-            st.markdown("#### Defineix els TARs inicials")
-            nou_tar1 = st.text_input("TAR 1")
-            nou_tar2 = st.text_input("TAR 2")
-            nou_tar3 = st.text_input("TAR 3")
-            nou_tar4 = st.text_input("TAR 4")
-            
-            btn_guardar = st.form_submit_button("Guardar Big Rock", type="primary")
-            
-            if btn_guardar:
-                if nou_nom.strip() == "":
-                    st.error("Has d'escriure un títol per a la Big Rock.")
-                else:
-                    afegir_nova_br(nou_nom, amb_persones, amb_reunions, [nou_tar1, nou_tar2, nou_tar3, nou_tar4])
+            if st.form_submit_button("Guardar", type="primary"):
+                if nou_nom:
+                    crear_nova_br(nou_nom, persones, reunions, [t1, t2, t3, t4])
+                    st.session_state.mostrar_formulari_br = False
                     st.rerun()
 
-
 # ==========================================
-# PANTALLA 2: RESUM DEL MES I TANCAMENT
+# 5. PANTALLA 2: RESUM DEL MES
 # ==========================================
 elif st.session_state.pantalla == 'resum':
+    st.title(f"📊 Resum de Tancament - {MES}")
     
-    st.title(f"📊 Resum de Tancament - {st.session_state.mes_actual}")
-    st.markdown("Abans de generar el mes següent, revisem com ha anat:")
+    brs = fetch_query("SELECT id, nom, persones, reunions FROM big_rocks WHERE username=? AND mes=?", (USUARI, MES))
+    tars_completats, tars_pendents = [], []
+    persones_set, reunions_set = set(), set()
     
-    # Recollim estadístiques
-    tars_completats = []
-    tars_pendents = []
-    totes_persones = set()
-    totes_reunions = set()
-    
-    for br in st.session_state.big_rocks:
-        if br['persones']: totes_persones.add(br['persones'])
-        if br['reunions']: totes_reunions.add(br['reunions'])
+    for br in brs:
+        if br[2]: persones_set.add(br[2])
+        if br[3]: reunions_set.add(br[3])
         
-        for t in br['tars']:
-            if t['estat'] == 'Actiu':
-                if t['progres'] == 100:
-                    tars_completats.append(f"{br['nom']} ➡️ {t['desc']}")
-                else:
-                    tars_pendents.append(f"{br['nom']} ➡️ {t['desc']} ({t['progres']}%)")
-                    
-    # Blocs visuals clau inspirats en la teva imatge
+        tars = fetch_query("SELECT descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu'", (br[0],))
+        for t in tars:
+            if t[1] == 100:
+                tars_completats.append(f"{br[1]} ➡️ {t[0]}")
+            else:
+                tars_pendents.append(f"{br[1]} ➡️ {t[0]} ({t[1]}%)")
+                
     st.markdown("<br>", unsafe_allow_html=True)
-    col_p, col_r = st.columns(2)
+    cp, cr = st.columns(2)
+    with cp: st.info(f"### 👥 PERSONES CLAU\n" + "\n".join([f"- {p}" for p in persones_set if p]))
+    with cr: st.info(f"### 📅 REUNIONS CLAU\n" + "\n".join([f"- {r}" for r in reunions_set if r]))
     
-    with col_p:
-        st.info(f"### 👥 PERSONAS CLAVES A PRIORIZAR\n" + "\n".join([f"- {p}" for p in totes_persones if p]))
-    
-    with col_r:
-        st.info(f"### 📅 REUNIONES CLAVE A PRIORIZAR\n" + "\n".join([f"- {r}" for r in totes_reunions if r]))
-        
     st.markdown("---")
-    
-    # Resum d'èxits i traspassos
-    col_exit, col_traspas = st.columns(2)
-    
-    with col_exit:
-        st.success("#### ✅ Èxits del mes (Es tanquen)")
-        if tars_completats:
-            for t in tars_completats:
-                st.write(f"- {t}")
-        else:
-            st.write("Cap TAR completat al 100% encara.")
-            
-    with col_traspas:
-        st.warning("#### 🔄 Es traspassen al mes següent")
-        if tars_pendents:
-            for t in tars_pendents:
-                st.write(f"- {t}")
-        else:
-            st.write("No queda res pendent!")
+    ce, ct = st.columns(2)
+    with ce:
+        st.success("#### ✅ Èxits del mes")
+        for t in tars_completats: st.write(f"- {t}")
+    with ct:
+        st.warning("#### 🔄 Es traspassen")
+        for t in tars_pendents: st.write(f"- {t}")
 
     st.markdown("---")
-    
-    # Botons finals de decisió
-    col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
-    with col_b1:
-        st.button("⬅️ Cancel·lar i tornar", on_click=tornar_a_dashboard, use_container_width=True)
-    with col_b3:
-        st.button("🚀 Confirmar i Crear Mes Següent", on_click=executar_traspas, type="primary", use_container_width=True)
+    cb1, cb2 = st.columns(2)
+    with cb1:
+        st.button("⬅️ Cancel·lar", on_click=lambda: st.session_state.update(pantalla='dashboard'))
+    with cb2:
+        st.button("🚀 Confirmar i Crear Mes Següent", on_click=tancar_mes_db, type="primary", use_container_width=True)
