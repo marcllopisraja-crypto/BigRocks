@@ -2,19 +2,18 @@
 import base64
 import hashlib
 import os
-import sqlite3
 from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V11
-# Versio neta amb diagnostic de BD, login corregit i disseny responsive
+# BIG ROCKS - SORIGUE | APP.py V12
+# Versio Supabase: sense SQLite ni bigrocks.db local
 # ============================================================
 
-DB_PATH = "bigrocks.db"
-DEBUG_DB = True  # Posa False quan ja hagis comprovat la BD i no vulguis mostrar el diagnostic.
+DEBUG_DB = True  # Posa False quan ja estigui comprovat i no vulguis veure el diagnostic.
 
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
@@ -114,7 +113,8 @@ TRANS = {
         "help_body": "Mantingues les Big Rocks concretes: objectiu clar, persones clau i 3-4 TARs mesurables.",
         "empty_cta": "Crea la primera Big Rock",
         "brand_subtitle": "Seguiment d'objectius",
-        "diagnostic": "Diagnòstic BD",
+        "diagnostic": "Diagnòstic Supabase",
+        "supabase_error": "No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets, i que requirements.txt inclogui supabase.",
         "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
     "es": {
@@ -180,7 +180,8 @@ TRANS = {
         "help_body": "Mantén las Big Rocks concretas: objetivo claro, personas clave y 3-4 TARs medibles.",
         "empty_cta": "Crea la primera Big Rock",
         "brand_subtitle": "Seguimiento de objetivos",
-        "diagnostic": "Diagnóstico BD",
+        "diagnostic": "Diagnóstico Supabase",
+        "supabase_error": "No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets, y que requirements.txt incluya supabase.",
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
 }
@@ -226,7 +227,6 @@ p, label, h1, h2, h3, h4, h5, h6,
     font-family: 'Montserrat', Arial, sans-serif !important;
 }}
 
-/* Evita que les icones internes de Streamlit es converteixin en text tipus keyboard_double_arrow_right */
 .material-symbols-rounded,
 .material-symbols-outlined,
 .material-icons,
@@ -586,36 +586,89 @@ footer {{visibility: hidden;}}
 inject_css()
 
 # ============================================================
-# BASE DE DADES I SEGURETAT
+# SUPABASE
 # ============================================================
 
-def get_conn():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+def clean_supabase_url(url):
+    if not url:
+        return ""
+    value = str(url).strip().rstrip("/")
+    if value.endswith("/rest/v1"):
+        value = value[:-8]
+    return value
 
 
-def run_query(query, params=()):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(query, params)
-    conn.commit()
-    lastrowid = cur.lastrowid
-    conn.close()
-    return lastrowid
+def get_secret_value(key, default=""):
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return os.environ.get(key, default)
 
 
-def fetch_query(query, params=()):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(query, params)
-    data = cur.fetchall()
-    conn.close()
-    return data
+@st.cache_resource(show_spinner=False)
+def get_supabase_client():
+    url = clean_supabase_url(get_secret_value("SUPABASE_URL", ""))
+    key = get_secret_value("SUPABASE_KEY", "")
+    if not url or not key:
+        return None
+    return create_client(url, key)
 
 
-def column_exists(table, column):
-    rows = fetch_query(f"PRAGMA table_info({table})")
-    return any(row[1] == column for row in rows)
+supabase = get_supabase_client()
 
+if supabase is None:
+    st.error(t("supabase_error"))
+    st.stop()
+
+
+def now_iso():
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def s_select(table, columns="*"):
+    return supabase.table(table).select(columns)
+
+
+def s_data(response):
+    return response.data if hasattr(response, "data") and response.data is not None else []
+
+
+def db_error_message(err):
+    msg = str(err)
+    if "row-level security" in msg.lower() or "rls" in msg.lower() or "permission" in msg.lower():
+        return (
+            "Error de permisos a Supabase. Si has activat RLS i no has creat policies, "
+            "utilitza la Secret key de Supabase dins Streamlit Secrets com SUPABASE_KEY, "
+            "o crea policies RLS per permetre aquesta app."
+        )
+    return msg
+
+# ============================================================
+# DIAGNOSTIC SUPABASE
+# ============================================================
+
+def show_db_diagnostic(location="main"):
+    if not DEBUG_DB:
+        return
+    try:
+        url = clean_supabase_url(get_secret_value("SUPABASE_URL", ""))
+        key = get_secret_value("SUPABASE_KEY", "")
+        users = s_data(s_select("usuaris", "username, language, created_at, last_login").order("username").execute())
+        brs = s_data(s_select("big_rocks", "id").execute())
+        tars = s_data(s_select("tars", "id").execute())
+        with st.expander(f"{t('diagnostic')} · {location}", expanded=False):
+            st.code(f"SUPABASE_URL: {url}")
+            st.write("KEY TYPE:", "secret" if str(key).startswith("sb_secret") else "publishable/anon")
+            st.write("USUARIS:", users)
+            st.write("TOTAL BIG ROCKS:", len(brs))
+            st.write("TOTAL TARs:", len(tars))
+    except Exception as e:
+        with st.expander(f"{t('diagnostic')} · {location}", expanded=True):
+            st.error(db_error_message(e))
+
+# ============================================================
+# SEGURETAT I DADES
+# ============================================================
 
 def hash_password(password, salt=None):
     if salt is None:
@@ -636,106 +689,43 @@ def verify_password(password, stored_password, stored_salt=None):
         return False
 
 
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS usuaris (
-            username TEXT PRIMARY KEY,
-            password TEXT,
-            language TEXT DEFAULT 'ca',
-            password_salt TEXT,
-            created_at TEXT,
-            last_login TEXT
-        )
-        """
+def get_user(username):
+    data = s_data(
+        s_select("usuaris", "username, password, password_salt, language")
+        .eq("username", username)
+        .limit(1)
+        .execute()
     )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS big_rocks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
-            mes TEXT,
-            nom TEXT,
-            persones TEXT,
-            reunions TEXT,
-            notes_progres TEXT,
-            pregunta TEXT,
-            passos TEXT,
-            created_at TEXT,
-            updated_at TEXT
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS tars (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            id_br INTEGER,
-            num TEXT,
-            descripcio TEXT,
-            progres INTEGER,
-            estat TEXT DEFAULT 'Actiu',
-            created_at TEXT,
-            updated_at TEXT,
-            FOREIGN KEY(id_br) REFERENCES big_rocks(id)
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS mesos_tancats (
-            username TEXT,
-            mes TEXT,
-            closed_at TEXT,
-            PRIMARY KEY(username, mes)
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
+    return data[0] if data else None
 
-    migrations = {
-        "usuaris": [("language", "TEXT DEFAULT 'ca'"), ("password_salt", "TEXT"), ("created_at", "TEXT"), ("last_login", "TEXT")],
-        "big_rocks": [("created_at", "TEXT"), ("updated_at", "TEXT")],
-        "tars": [("created_at", "TEXT"), ("updated_at", "TEXT")],
-        "mesos_tancats": [("closed_at", "TEXT")],
+
+def create_user(username, password, language):
+    if get_user(username):
+        return False
+    salt, digest = hash_password(password)
+    payload = {
+        "username": username,
+        "password": digest,
+        "password_salt": salt,
+        "language": language,
+        "created_at": now_iso(),
+        "last_login": None,
     }
-    for table, cols in migrations.items():
-        for col, col_type in cols:
-            if not column_exists(table, col):
-                try:
-                    run_query(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-                except sqlite3.OperationalError:
-                    pass
+    supabase.table("usuaris").insert(payload).execute()
+    return True
 
-# IMPORTANT: init_db() ha d'anar aqui, quan totes les funcions de BD ja existeixen.
-init_db()
 
-# Diagnostic BD integrat. Es mostra a pantalla, no trenca el login i ajuda a comprovar si Streamlit ha creat una BD buida.
-def show_db_diagnostic(location="main"):
-    if not DEBUG_DB:
-        return
-    try:
-        users = fetch_query("SELECT username, language, created_at, last_login FROM usuaris ORDER BY username")
-        br_count = fetch_query("SELECT COUNT(*) FROM big_rocks")[0][0]
-        tar_count = fetch_query("SELECT COUNT(*) FROM tars")[0][0]
-        with st.expander(f"{t('diagnostic')} · {location}", expanded=False):
-            st.code(f"PATH BD: {os.path.abspath(DB_PATH)}")
-            st.write("EXISTEIX:", os.path.exists(DB_PATH))
-            st.write("USUARIS:", users)
-            st.write("TOTAL BIG ROCKS:", br_count)
-            st.write("TOTAL TARs:", tar_count)
-    except Exception as e:
-        st.warning(f"Error llegint diagnòstic BD: {e}")
+def update_user_login(username):
+    supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
 
-# ============================================================
-# UTILITATS
-# ============================================================
 
-def now_iso():
-    return datetime.now().isoformat(timespec="seconds")
+def migrate_plain_password(username, password):
+    salt, digest = hash_password(password)
+    supabase.table("usuaris").update({"password": digest, "password_salt": salt}).eq("username", username).execute()
+
+
+def update_user_language(username, language):
+    supabase.table("usuaris").update({"language": language}).eq("username", username).execute()
 
 
 def get_month_key(lang=None):
@@ -843,42 +833,65 @@ def kpi_card(label, value):
 
 
 def get_brs(username, month):
-    return fetch_query(
-        """
-        SELECT id, nom, persones, reunions, notes_progres, pregunta, passos
-        FROM big_rocks
-        WHERE username=? AND mes=?
-        ORDER BY id ASC
-        """,
-        (username, month),
+    return s_data(
+        s_select("big_rocks", "id, nom, persones, reunions, notes_progres, pregunta, passos")
+        .eq("username", username)
+        .eq("mes", month)
+        .order("id")
+        .execute()
     )
 
 
 def get_tars(br_id, active_only=True):
+    query = s_select("tars", "id, num, descripcio, progres, estat").eq("id_br", br_id)
     if active_only:
-        return fetch_query(
-            "SELECT id, num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu' ORDER BY id ASC",
-            (br_id,),
-        )
-    return fetch_query(
-        "SELECT id, num, descripcio, progres, estat FROM tars WHERE id_br=? ORDER BY id ASC",
-        (br_id,),
+        query = query.eq("estat", "Actiu")
+    return s_data(query.order("id").execute())
+
+
+def get_months(username):
+    rows = s_data(
+        s_select("big_rocks", "id, mes")
+        .eq("username", username)
+        .order("id", desc=True)
+        .execute()
     )
+    seen = []
+    for row in rows:
+        mes = row.get("mes")
+        if mes and mes not in seen:
+            seen.append(mes)
+    return seen
 
 
 def month_is_closed(username, month):
-    return len(fetch_query("SELECT 1 FROM mesos_tancats WHERE username=? AND mes=?", (username, month))) > 0
+    data = s_data(
+        s_select("mesos_tancats", "username, mes")
+        .eq("username", username)
+        .eq("mes", month)
+        .limit(1)
+        .execute()
+    )
+    return len(data) > 0
+
+
+def close_month(username, month):
+    supabase.table("mesos_tancats").upsert({"username": username, "mes": month, "closed_at": now_iso()}).execute()
+
+
+def unlock_month(username, month):
+    supabase.table("mesos_tancats").delete().eq("username", username).eq("mes", month).execute()
 
 
 def dashboard_stats(username, month):
     brs = get_brs(username, month)
     all_tars = []
     for br in brs:
-        all_tars.extend(get_tars(br[0], active_only=True))
+        all_tars.extend(get_tars(br["id"], active_only=True))
     total = len(all_tars)
-    completed = sum(1 for tar in all_tars if int(tar[3]) == 100)
-    pending = sum(1 for tar in all_tars if int(tar[3]) < 100)
-    avg = int(sum(int(tar[3]) for tar in all_tars) / total) if total else 0
+    completed = sum(1 for tar in all_tars if int(tar.get("progres") or 0) == 100)
+    pending = sum(1 for tar in all_tars if int(tar.get("progres") or 0) < 100)
+    avg = int(sum(int(tar.get("progres") or 0) for tar in all_tars) / total) if total else 0
     return len(brs), completed, pending, avg
 
 
@@ -889,45 +902,87 @@ def update_db_val(table, field, val, uid):
     }
     if table not in allowed or field not in allowed[table]:
         return
-    run_query(f"UPDATE {table} SET {field}=?, updated_at=? WHERE id=?", (val, now_iso(), uid))
+    payload = {field: val, "updated_at": now_iso()}
+    supabase.table(table).update(payload).eq("id", uid).execute()
 
 
 def archive_tar(tar_id):
-    run_query("UPDATE tars SET estat='Arxivat', updated_at=? WHERE id=?", (now_iso(), tar_id))
+    supabase.table("tars").update({"estat": "Arxivat", "updated_at": now_iso()}).eq("id", tar_id).execute()
+
+
+def create_bigrock(username, month, nom, persones, reunions, tar_descs):
+    payload = {
+        "username": username,
+        "mes": month,
+        "nom": nom,
+        "persones": persones,
+        "reunions": reunions,
+        "notes_progres": "",
+        "pregunta": "",
+        "passos": "",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    res = supabase.table("big_rocks").insert(payload).execute()
+    data = s_data(res)
+    if not data:
+        return None
+    br_id = data[0]["id"]
+    rows = []
+    for i, desc in enumerate(tar_descs, start=1):
+        if desc.strip():
+            rows.append({
+                "id_br": br_id,
+                "num": f"TAR {i}",
+                "descripcio": desc.strip(),
+                "progres": 0,
+                "estat": "Actiu",
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            })
+    if rows:
+        supabase.table("tars").insert(rows).execute()
+    return br_id
+
+
+def save_bigrock_notes(br_id, notes, pregunta, passos):
+    supabase.table("big_rocks").update({
+        "notes_progres": notes,
+        "pregunta": pregunta,
+        "passos": passos,
+        "updated_at": now_iso(),
+    }).eq("id", br_id).execute()
+
+
+def export_month_dataframe(username, month):
+    rows = []
+    for br in get_brs(username, month):
+        for tar in get_tars(br["id"], active_only=True):
+            rows.append({
+                "usuari": username,
+                "mes": month,
+                "big_rock": br.get("nom"),
+                "persones_clau": br.get("persones"),
+                "reunions": br.get("reunions"),
+                "tar": tar.get("num"),
+                "descripcio": tar.get("descripcio"),
+                "progres": tar.get("progres"),
+                "notes_progres": br.get("notes_progres"),
+                "pregunta": br.get("pregunta"),
+                "passos": br.get("passos"),
+            })
+    return pd.DataFrame(rows)
 
 
 def change_language():
     username = st.session_state.get("usuari_actual")
     selected = st.session_state.get("idioma_selector", "ca")
     if username:
-        run_query("UPDATE usuaris SET language=? WHERE username=?", (selected, username))
+        update_user_language(username, selected)
     previous_month = st.session_state.get("mes_actual")
     st.session_state.idioma = selected
     if previous_month:
         st.session_state.mes_actual = normalize_month_to_lang(previous_month, selected)
-
-
-def export_month_dataframe(username, month):
-    rows = []
-    for br in get_brs(username, month):
-        br_id, nom, persones, reunions, notes, pregunta, passos = br
-        for tar in get_tars(br_id, active_only=True):
-            rows.append(
-                {
-                    "usuari": username,
-                    "mes": month,
-                    "big_rock": nom,
-                    "persones_clau": persones,
-                    "reunions": reunions,
-                    "tar": tar[1],
-                    "descripcio": tar[2],
-                    "progres": tar[3],
-                    "notes_progres": notes,
-                    "pregunta": pregunta,
-                    "passos": passos,
-                }
-            )
-    return pd.DataFrame(rows)
 
 # ============================================================
 # SESSION STATE
@@ -975,25 +1030,21 @@ if st.session_state.usuari_actual is None:
                     if not username_clean or not contrasenya.strip():
                         st.error(t("required_fields"))
                     else:
-                        user_data = fetch_query(
-                            "SELECT password, password_salt, language FROM usuaris WHERE username=?",
-                            (username_clean,),
-                        )
-                        if user_data and verify_password(contrasenya, user_data[0][0], user_data[0][1]):
-                            st.session_state.usuari_actual = username_clean
-                            st.session_state.idioma = user_data[0][2] if user_data[0][2] else "ca"
-                            st.session_state.mes_actual = get_month_key(st.session_state.idioma)
-                            st.session_state.pantalla = "dashboard"
-                            run_query("UPDATE usuaris SET last_login=? WHERE username=?", (now_iso(), username_clean))
-                            if not user_data[0][1]:
-                                salt, digest = hash_password(contrasenya)
-                                run_query(
-                                    "UPDATE usuaris SET password=?, password_salt=? WHERE username=?",
-                                    (digest, salt, username_clean),
-                                )
-                            st.rerun()
-                        else:
-                            st.error(t("err_login"))
+                        try:
+                            user = get_user(username_clean)
+                            if user and verify_password(contrasenya, user.get("password"), user.get("password_salt")):
+                                st.session_state.usuari_actual = username_clean
+                                st.session_state.idioma = user.get("language") or "ca"
+                                st.session_state.mes_actual = get_month_key(st.session_state.idioma)
+                                st.session_state.pantalla = "dashboard"
+                                update_user_login(username_clean)
+                                if not user.get("password_salt"):
+                                    migrate_plain_password(username_clean, contrasenya)
+                                st.rerun()
+                            else:
+                                st.error(t("err_login"))
+                        except Exception as e:
+                            st.error(db_error_message(e))
 
         with tab2:
             with st.form("register_form"):
@@ -1011,17 +1062,13 @@ if st.session_state.usuari_actual is None:
                         st.error(t("required_fields"))
                     else:
                         try:
-                            salt, digest = hash_password(nova_contra)
-                            run_query(
-                                """
-                                INSERT INTO usuaris (username, password, language, password_salt, created_at, last_login)
-                                VALUES (?, ?, ?, ?, ?, NULL)
-                                """,
-                                (username_clean, digest, nou_idioma, salt, now_iso()),
-                            )
-                            st.success(t("succ_reg"))
-                        except sqlite3.IntegrityError:
-                            st.error(t("err_reg"))
+                            ok = create_user(username_clean, nova_contra, nou_idioma)
+                            if ok:
+                                st.success(t("succ_reg"))
+                            else:
+                                st.error(t("err_reg"))
+                        except Exception as e:
+                            st.error(db_error_message(e))
     st.stop()
 
 # ============================================================
@@ -1057,13 +1104,7 @@ with st.sidebar:
     )
     st.session_state.idioma = idioma_triat
 
-    mesos_disponibles = [
-        row[0]
-        for row in fetch_query(
-            "SELECT DISTINCT mes FROM big_rocks WHERE username=? ORDER BY id DESC",
-            (USUARI,),
-        )
-    ]
+    mesos_disponibles = get_months(USUARI)
     mes_ini = get_month_key(st.session_state.idioma)
     if mes_ini not in mesos_disponibles:
         mesos_disponibles.insert(0, mes_ini)
@@ -1091,7 +1132,7 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
         if st.button(t("unlock"), use_container_width=True):
-            run_query("DELETE FROM mesos_tancats WHERE username=? AND mes=?", (USUARI, MES))
+            unlock_month(USUARI, MES)
             st.rerun()
     else:
         st.markdown(
@@ -1186,15 +1227,15 @@ if st.session_state.pantalla == "dashboard":
                     st.session_state.mostrar_formulari_br = True
     else:
         for br in brs:
-            br_id, nom, persones, reunions, notes_progres, pregunta, passos = br
+            br_id = br["id"]
             tars = get_tars(br_id, active_only=True)
-            progres_mitja = int(sum(int(tar[3]) for tar in tars) / len(tars)) if tars else 0
+            progres_mitja = int(sum(int(tar.get("progres") or 0) for tar in tars) / len(tars)) if tars else 0
 
             st.markdown(
                 f"""
                 <div class="bigrock-card">
-                    <div class="bigrock-title">{nom}</div>
-                    <div class="bigrock-meta"><strong>{t('key_ppl')}:</strong> {persones or '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {reunions or '-'}</div>
+                    <div class="bigrock-title">{br.get('nom') or ''}</div>
+                    <div class="bigrock-meta"><strong>{t('key_ppl')}:</strong> {br.get('persones') or '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {br.get('reunions') or '-'}</div>
                     <div style="font-weight:700; color:#53565A; font-size:13px; text-transform:uppercase;">{t('global_prog')}</div>
                 </div>
                 """,
@@ -1203,12 +1244,13 @@ if st.session_state.pantalla == "dashboard":
             progress_bar(progres_mitja, f"{progres_mitja}%")
 
             for tar in tars:
-                tar_id, num, desc, progres = tar
-                progres = int(progres) if int(progres) in [0, 50, 100] else 0
+                tar_id = tar["id"]
+                progres = int(tar.get("progres") or 0)
+                progres = progres if progres in [0, 50, 100] else 0
                 st.markdown("<div class='tar-card'>", unsafe_allow_html=True)
                 top_a, top_b = st.columns([1, 1])
                 with top_a:
-                    st.markdown(f"<div class='tar-badge'>{num}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='tar-badge'>{tar.get('num') or ''}</div>", unsafe_allow_html=True)
                 with top_b:
                     if not es_tancat:
                         st.button(
@@ -1222,7 +1264,7 @@ if st.session_state.pantalla == "dashboard":
                 k_desc = f"desc_{tar_id}"
                 st.text_input(
                     t("desc"),
-                    value=desc,
+                    value=tar.get("descripcio") or "",
                     key=k_desc,
                     label_visibility="collapsed",
                     disabled=es_tancat,
@@ -1248,15 +1290,12 @@ if st.session_state.pantalla == "dashboard":
                 notes_key = f"notes_{br_id}"
                 preg_key = f"preg_{br_id}"
                 passos_key = f"passos_{br_id}"
-                notes = st.text_area(t("prog"), value=notes_progres or "", key=notes_key, disabled=es_tancat)
-                preg = st.text_input(t("need"), value=pregunta or "", key=preg_key, disabled=es_tancat)
-                passos_val = st.text_input(t("next_steps"), value=passos or "", key=passos_key, disabled=es_tancat)
+                notes = st.text_area(t("prog"), value=br.get("notes_progres") or "", key=notes_key, disabled=es_tancat)
+                preg = st.text_input(t("need"), value=br.get("pregunta") or "", key=preg_key, disabled=es_tancat)
+                passos_val = st.text_input(t("next_steps"), value=br.get("passos") or "", key=passos_key, disabled=es_tancat)
                 if not es_tancat:
                     if st.button(t("save_notes"), key=f"save_{br_id}"):
-                        run_query(
-                            "UPDATE big_rocks SET notes_progres=?, pregunta=?, passos=?, updated_at=? WHERE id=?",
-                            (notes, preg, passos_val, now_iso(), br_id),
-                        )
+                        save_bigrock_notes(br_id, notes, preg, passos_val)
                         st.success(t("saved"))
 
     if not es_tancat:
@@ -1281,25 +1320,12 @@ if st.session_state.pantalla == "dashboard":
                     if not nou_nom.strip():
                         st.error(t("title_br"))
                     else:
-                        br_id = run_query(
-                            """
-                            INSERT INTO big_rocks
-                            (username, mes, nom, persones, reunions, notes_progres, pregunta, passos, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, '', '', '', ?, ?)
-                            """,
-                            (USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), now_iso(), now_iso()),
-                        )
-                        for i, desc_tar in enumerate([t1, t2, t3, t4], start=1):
-                            if desc_tar.strip():
-                                run_query(
-                                    """
-                                    INSERT INTO tars (id_br, num, descripcio, progres, estat, created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, 'Actiu', ?, ?)
-                                    """,
-                                    (br_id, f"TAR {i}", desc_tar.strip(), 0, now_iso(), now_iso()),
-                                )
-                        st.session_state.mostrar_formulari_br = False
-                        st.rerun()
+                        try:
+                            create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4])
+                            st.session_state.mostrar_formulari_br = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(db_error_message(e))
 
 # ============================================================
 # RESUM I TANCAMENT DE MES
@@ -1315,16 +1341,15 @@ elif st.session_state.pantalla == "resum":
     total_tars = 0
 
     for br in brs:
-        br_id, nom, persones, reunions, *_ = br
-        for tar in get_tars(br_id, active_only=True):
-            _, _, desc, progres = tar
-            progres = int(progres)
+        for tar in get_tars(br["id"], active_only=True):
+            desc = tar.get("descripcio") or ""
+            progres = int(tar.get("progres") or 0)
             sumatori_progres += progres
             total_tars += 1
             if progres == 100:
-                tars_completats.append((nom, desc))
+                tars_completats.append((br.get("nom") or "", desc))
             else:
-                tars_pendents.append((nom, desc, progres))
+                tars_pendents.append((br.get("nom") or "", desc, progres))
 
     compliment_global = int(sumatori_progres / total_tars) if total_tars else 0
     st.markdown(f"### {t('global_comp')}")
@@ -1347,34 +1372,40 @@ elif st.session_state.pantalla == "resum":
             st.caption("-")
 
     def confirm_month_close():
-        run_query(
-            "INSERT OR IGNORE INTO mesos_tancats (username, mes, closed_at) VALUES (?, ?, ?)",
-            (USUARI, MES, now_iso()),
-        )
+        close_month(USUARI, MES)
         nou_mes = next_month(MES, st.session_state.idioma)
         for br in get_brs(USUARI, MES):
-            br_id, nom, persones, reunions, *_ = br
-            pendents_db = fetch_query(
-                "SELECT num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu' AND progres < 100 ORDER BY id ASC",
-                (br_id,),
-            )
-            if pendents_db:
-                new_br_id = run_query(
-                    """
-                    INSERT INTO big_rocks
-                    (username, mes, nom, persones, reunions, notes_progres, pregunta, passos, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, '', '', '', ?, ?)
-                    """,
-                    (USUARI, nou_mes, nom, persones, reunions, now_iso(), now_iso()),
-                )
-                for tar in pendents_db:
-                    run_query(
-                        """
-                        INSERT INTO tars (id_br, num, descripcio, progres, estat, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, 'Actiu', ?, ?)
-                        """,
-                        (new_br_id, tar[0], tar[1], tar[2], now_iso(), now_iso()),
-                    )
+            pendents = [tar for tar in get_tars(br["id"], active_only=True) if int(tar.get("progres") or 0) < 100]
+            if pendents:
+                payload = {
+                    "username": USUARI,
+                    "mes": nou_mes,
+                    "nom": br.get("nom") or "",
+                    "persones": br.get("persones") or "",
+                    "reunions": br.get("reunions") or "",
+                    "notes_progres": "",
+                    "pregunta": "",
+                    "passos": "",
+                    "created_at": now_iso(),
+                    "updated_at": now_iso(),
+                }
+                res = supabase.table("big_rocks").insert(payload).execute()
+                data = s_data(res)
+                if data:
+                    new_br_id = data[0]["id"]
+                    rows = []
+                    for tar in pendents:
+                        rows.append({
+                            "id_br": new_br_id,
+                            "num": tar.get("num") or "TAR",
+                            "descripcio": tar.get("descripcio") or "",
+                            "progres": int(tar.get("progres") or 0),
+                            "estat": "Actiu",
+                            "created_at": now_iso(),
+                            "updated_at": now_iso(),
+                        })
+                    if rows:
+                        supabase.table("tars").insert(rows).execute()
         st.session_state.mes_actual = nou_mes
         st.session_state.pantalla = "dashboard"
         st.rerun()
