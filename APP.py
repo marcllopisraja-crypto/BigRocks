@@ -1,6 +1,7 @@
 
 import base64
 import hashlib
+import html
 import json
 import os
 import re
@@ -11,8 +12,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V19
-# Supabase + desplegament BR corregit + mesos independents idioma
+# BIG ROCKS - SORIGUE | APP.py V20
+# Supabase + TARs compactes + desplegament BR corregit
 # ============================================================
 
 DEBUG_DB = False
@@ -251,6 +252,10 @@ h3 {{font-size:20px !important;line-height:28px !important;font-weight:600 !impo
 .tar-form-card {{background:#FFFFFF;border-radius:8px;padding:16px 18px;margin:14px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
 .tar-title-line {{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}}
 .tar-title-text {{font-size:15px;font-weight:700;color:var(--s-primary-dark);}}
+.tar-header-card {background:#FFFFFF;border-radius:8px;padding:10px 12px;margin:2px 0 10px 0;border-left:6px solid var(--s-primary);box-shadow:0 1px 4px rgba(35,35,35,.06);}
+.tar-header-title {font-size:15px;font-weight:700;color:var(--s-primary-dark);line-height:21px;}
+.tar-header-progress {font-size:13px;font-weight:700;color:var(--s-text);}
+
 .tar-progress-mini {{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px 0;}}
 .tar-progress-pill {{display:inline-flex;align-items:center;border-radius:999px;background:#F3F6F8;color:var(--s-grey);font-weight:700;font-size:12px;padding:5px 9px;border:1px solid #E0E2E3;}}
 .tar-progress-pill.active-0 {{background:#FDECEF;color:#B42335;border-color:#F5B5C0;}}
@@ -544,6 +549,10 @@ def tar_progress_pills_html(active_value):
         cls = f"tar-progress-pill active-{value}" if value == active_value else "tar-progress-pill"
         parts.append(f"<span class='{cls}'>{colors[value]} {value}%</span>")
     return "<div class='tar-progress-mini'>" + "".join(parts) + "</div>"
+
+
+def safe_html(value):
+    return html.escape(str(value or ""))
 
 
 def find_existing(candidates):
@@ -1077,14 +1086,12 @@ if st.session_state.pantalla == "dashboard":
 
             with st.form(f"form_bigrock_{br_id}"):
                 with st.expander(t("details"), expanded=False):
-                    st.markdown("<div class='details-card'>", unsafe_allow_html=True)
                     notes_key = f"notes_{br_id}"
                     preg_key = f"preg_{br_id}"
                     passos_key = f"passos_{br_id}"
                     st.text_area(t("prog"), value=br_notes, key=notes_key, disabled=es_tancat)
                     st.text_input(t("need"), value=br.get("pregunta") or "", key=preg_key, disabled=es_tancat)
                     st.text_input(t("next_steps"), value=br.get("passos") or "", key=passos_key, disabled=es_tancat)
-                    st.markdown("</div>", unsafe_allow_html=True)
 
                 st.markdown("### TARs")
                 tar_updates = {}
@@ -1097,20 +1104,25 @@ if st.session_state.pantalla == "dashboard":
                     prog_key = f"prog_{tar_id}"
                     note_key = f"tar_note_{tar_id}"
                     current_progress = st.session_state.get(prog_key, progres)
-                    st.markdown(f"""
-                        <div class='tar-form-card'>
-                            <div class='tar-title-line'>
-                                <div class='tar-title-text'>{tar.get('num') or ''}</div>
-                                <div>{status_dot(current_progress)} <strong>{current_progress}%</strong></div>
+                    initial_desc = tar.get("descripcio") or ""
+                    header_title = f"{tar.get('num') or ''} · {initial_desc}" if initial_desc else (tar.get("num") or "")
+                    with st.container(border=True):
+                        st.markdown(
+                            f"""
+                            <div class='tar-header-card'>
+                                <div class='tar-title-line'>
+                                    <div class='tar-header-title'>{safe_html(header_title)}</div>
+                                    <div class='tar-header-progress'>{status_dot(current_progress)} {current_progress}%</div>
+                                </div>
                             </div>
-                        """, unsafe_allow_html=True)
-                    st.text_input(t("desc"), value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
-                    st.radio(t("state"), options=[0, 25, 50, 75, 100], format_func=progress_radio_label, index=[0, 25, 50, 75, 100].index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
-                    st.markdown(tar_progress_pills_html(st.session_state.get(prog_key, progres)), unsafe_allow_html=True)
-                    with st.expander(t("tar_notes"), expanded=False):
-                        st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    tar_updates[tar_id] = {"descripcio": st.session_state.get(desc_key, tar.get("descripcio") or ""), "progres": st.session_state.get(prog_key, progres)}
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        st.text_input(t("desc"), value=initial_desc, key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
+                        st.radio(t("state"), options=[0, 25, 50, 75, 100], format_func=progress_radio_label, index=[0, 25, 50, 75, 100].index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
+                        with st.expander(t("tar_notes"), expanded=False):
+                            st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
+                    tar_updates[tar_id] = {"descripcio": st.session_state.get(desc_key, initial_desc), "progres": st.session_state.get(prog_key, progres)}
                     tar_note_updates[tar_id] = st.session_state.get(note_key, tar_notes.get(str(tar_id), ""))
 
                 submit_bigrock = st.form_submit_button(t("save_full_br"), type="primary", use_container_width=True, disabled=es_tancat)
