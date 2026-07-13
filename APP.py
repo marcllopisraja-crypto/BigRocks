@@ -1,6 +1,7 @@
 
 import base64
 import hashlib
+import json
 import os
 from datetime import datetime
 
@@ -9,11 +10,12 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V12
-# Versio Supabase: sense SQLite ni bigrocks.db local
+# BIG ROCKS - SORIGUE | APP.py V13
+# Supabase + millores UI + informe sense tancar + notes per TAR
 # ============================================================
 
-DEBUG_DB = True  # Posa False quan ja estigui comprovat i no vulguis veure el diagnostic.
+DEBUG_DB = False  # Posa True nomes si vols veure el diagnostic de Supabase a pantalla.
+USE_IMAGE_LOGO = False  # False evita logos PNG amb fons negre. Mostra sorigue en text blanc.
 
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
@@ -25,6 +27,7 @@ SUCCESS = "#03A446"
 WARNING = "#D9AF00"
 ERROR = "#E53A4F"
 LIGHT_BLUE = "#E7F2F7"
+NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
 
 LOGO_NEGATIVE_CANDIDATES = [
     "sorigue_logo_RGB-negativo.png",
@@ -73,6 +76,9 @@ TRANS = {
         "open_month": "Mes obert i editable",
         "logout": "Tancar sessió",
         "eval_close": "Avaluar i tancar mes",
+        "eval_no_close": "Avaluar sense tancar",
+        "report_title": "Informe de seguiment",
+        "back": "Tornar",
         "no_br_title": "Encara no tens cap Big Rock creada",
         "no_br_body": "Crea la primera Big Rock per començar el seguiment mensual.",
         "key_ppl": "Persones clau",
@@ -81,10 +87,13 @@ TRANS = {
         "state": "Estat",
         "desc": "Descripció de la tasca",
         "details": "Detalls, preguntes i pròxims passos",
-        "prog": "Progrés",
+        "tar_notes": "Anotacions de la TAR",
+        "tar_notes_placeholder": "Escriu observacions, acords, incidències o seguiment específic d'aquesta TAR...",
+        "prog": "Detalls de progrés",
         "need": "Pregunta o necessitat",
         "next_steps": "Pròxims passos",
         "save_notes": "Guardar notes",
+        "save_tar_notes": "Guardar anotacions TAR",
         "create_br": "Crear nova Big Rock",
         "config_br": "Configura la teva nova Big Rock",
         "title_br": "Títol de la Big Rock",
@@ -93,6 +102,7 @@ TRANS = {
         "global_comp": "Grau de compliment global",
         "successes": "Èxits completats",
         "carry_over": "Es traspassen",
+        "in_progress": "En curs",
         "cancel": "Cancel·lar i tornar",
         "confirm_close": "Confirmar tancament i crear mes següent",
         "active_brs": "Big Rocks actives",
@@ -100,8 +110,6 @@ TRANS = {
         "pending_tars": "TARs pendents",
         "avg_progress": "Progrés mitjà",
         "export_csv": "Exportar CSV",
-        "archive": "Arxivar",
-        "delete_help": "Arxivar aquesta TAR",
         "people_placeholder": "Ex. Xavier, Gerard, equip nord...",
         "meetings_placeholder": "Ex. Seguiment setmanal, comitè mensual...",
         "title_placeholder": "Ex. Reduir incidències crítiques de l'obra",
@@ -140,6 +148,9 @@ TRANS = {
         "open_month": "Mes abierto y editable",
         "logout": "Cerrar sesión",
         "eval_close": "Evaluar y cerrar mes",
+        "eval_no_close": "Evaluar sin cerrar",
+        "report_title": "Informe de seguimiento",
+        "back": "Volver",
         "no_br_title": "Aún no tienes ninguna Big Rock creada",
         "no_br_body": "Crea la primera Big Rock para empezar el seguimiento mensual.",
         "key_ppl": "Personas clave",
@@ -148,10 +159,13 @@ TRANS = {
         "state": "Estado",
         "desc": "Descripción de la tarea",
         "details": "Detalles, preguntas y próximos pasos",
-        "prog": "Progreso",
+        "tar_notes": "Anotaciones de la TAR",
+        "tar_notes_placeholder": "Escribe observaciones, acuerdos, incidencias o seguimiento específico de esta TAR...",
+        "prog": "Detalles de progreso",
         "need": "Pregunta o necesidad",
         "next_steps": "Próximos pasos",
         "save_notes": "Guardar notas",
+        "save_tar_notes": "Guardar anotaciones TAR",
         "create_br": "Crear nueva Big Rock",
         "config_br": "Configura tu nueva Big Rock",
         "title_br": "Título de la Big Rock",
@@ -160,6 +174,7 @@ TRANS = {
         "global_comp": "Grado de cumplimiento global",
         "successes": "Éxitos completados",
         "carry_over": "Se traspasan",
+        "in_progress": "En curso",
         "cancel": "Cancelar y volver",
         "confirm_close": "Confirmar cierre y crear mes siguiente",
         "active_brs": "Big Rocks activas",
@@ -167,8 +182,6 @@ TRANS = {
         "pending_tars": "TARs pendientes",
         "avg_progress": "Progreso medio",
         "export_csv": "Exportar CSV",
-        "archive": "Archivar",
-        "delete_help": "Archivar esta TAR",
         "people_placeholder": "Ej. Xavier, Gerard, equipo norte...",
         "meetings_placeholder": "Ej. Seguimiento semanal, comité mensual...",
         "title_placeholder": "Ej. Reducir incidencias críticas de la obra",
@@ -274,6 +287,16 @@ h3 {{
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {{display: none !important;}}
+
+.login-logo-text {{
+    color: #FFFFFF;
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    margin: 0 auto 24px auto;
+    letter-spacing: -2px;
+}}
 
 [data-testid="stSidebar"] {{
     background: linear-gradient(180deg, var(--s-primary) 0%, #08A7E8 100%) !important;
@@ -569,6 +592,7 @@ footer {{visibility: hidden;}}
         padding-right: 1rem;
     }}
     h1 {{ font-size: 32px !important; line-height: 38px !important; }}
+    .login-logo-text {{ font-size: 48px; }}
     .kpi-card {{ min-height: 92px; padding: 14px 15px; }}
     .kpi-value {{ font-size: 28px; line-height: 34px; }}
     .bigrock-card {{ padding: 18px 16px; margin-bottom: 12px; }}
@@ -642,6 +666,52 @@ def db_error_message(err):
             "o crea policies RLS per permetre aquesta app."
         )
     return msg
+
+# ============================================================
+# NOTES BIG ROCK / TAR SENSE CANVIS D'ESQUEMA
+# Es desa tot dins big_rocks.notes_progres en format JSON intern.
+# Si ja hi havia text antic, es conserva com a detall de progres.
+# ============================================================
+
+def unpack_notes(raw):
+    if not raw:
+        return "", {}
+    if isinstance(raw, str) and raw.startswith(NOTES_PREFIX):
+        try:
+            obj = json.loads(raw[len(NOTES_PREFIX):])
+            return obj.get("br_notes", "") or "", obj.get("tar_notes", {}) or {}
+        except Exception:
+            return "", {}
+    return raw, {}
+
+
+def pack_notes(br_notes, tar_notes):
+    payload = {
+        "br_notes": br_notes or "",
+        "tar_notes": tar_notes or {},
+    }
+    return NOTES_PREFIX + json.dumps(payload, ensure_ascii=False)
+
+
+def get_br_by_id(br_id):
+    data = s_data(
+        s_select("big_rocks", "id, notes_progres")
+        .eq("id", br_id)
+        .limit(1)
+        .execute()
+    )
+    return data[0] if data else None
+
+
+def save_tar_note(br_id, tar_id, note):
+    br = get_br_by_id(br_id)
+    current_raw = br.get("notes_progres") if br else ""
+    br_notes, tar_notes = unpack_notes(current_raw)
+    tar_notes[str(tar_id)] = note or ""
+    supabase.table("big_rocks").update({
+        "notes_progres": pack_notes(br_notes, tar_notes),
+        "updated_at": now_iso(),
+    }).eq("id", br_id).execute()
 
 # ============================================================
 # DIAGNOSTIC SUPABASE
@@ -771,7 +841,7 @@ def progress_color(progress):
         return ERROR
     if progress <= 50:
         return WARNING
-    if progress <= 90:
+    if progress <= 75:
         return "#D9AF00"
     return SUCCESS
 
@@ -805,19 +875,21 @@ def find_existing(candidates):
 
 
 def logo_for_sidebar():
-    negative = find_existing(LOGO_NEGATIVE_CANDIDATES)
-    if negative:
-        b64 = file_to_b64(negative)
-        return f'<img src="data:image/png;base64,{b64}" style="width:220px; max-width:100%; display:block; margin: 12px auto 18px auto;">'
+    if USE_IMAGE_LOGO:
+        negative = find_existing(LOGO_NEGATIVE_CANDIDATES)
+        if negative:
+            b64 = file_to_b64(negative)
+            return f'<img src="data:image/png;base64,{b64}" style="width:220px; max-width:100%; display:block; margin: 12px auto 18px auto;">'
     return '<div class="sidebar-logo-text">sorigué</div>'
 
 
 def logo_for_login():
-    positive = find_existing(LOGO_POSITIVE_CANDIDATES)
-    if positive:
-        b64 = file_to_b64(positive)
-        return f'<img src="data:image/png;base64,{b64}" style="width:250px; max-width:100%; display:block; margin: 0 auto 22px auto;">'
-    return '<div style="font-size:48px; font-weight:700; color:white; text-align:center; margin-bottom:18px;">sorigué</div>'
+    if USE_IMAGE_LOGO:
+        positive = find_existing(LOGO_POSITIVE_CANDIDATES)
+        if positive:
+            b64 = file_to_b64(positive)
+            return f'<img src="data:image/png;base64,{b64}" style="width:250px; max-width:100%; display:block; margin: 0 auto 22px auto;">'
+    return '<div class="login-logo-text">sorigué</div>'
 
 
 def kpi_card(label, value):
@@ -906,20 +978,17 @@ def update_db_val(table, field, val, uid):
     supabase.table(table).update(payload).eq("id", uid).execute()
 
 
-def archive_tar(tar_id):
-    supabase.table("tars").update({"estat": "Arxivat", "updated_at": now_iso()}).eq("id", tar_id).execute()
-
-
-def create_bigrock(username, month, nom, persones, reunions, tar_descs):
+def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes, pregunta, passos):
+    notes_payload = pack_notes(br_notes, {})
     payload = {
         "username": username,
         "mes": month,
         "nom": nom,
         "persones": persones,
         "reunions": reunions,
-        "notes_progres": "",
-        "pregunta": "",
-        "passos": "",
+        "notes_progres": notes_payload,
+        "pregunta": pregunta,
+        "passos": passos,
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
@@ -945,9 +1014,10 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs):
     return br_id
 
 
-def save_bigrock_notes(br_id, notes, pregunta, passos):
+def save_bigrock_notes(br_id, raw_current_notes, br_notes, pregunta, passos):
+    _, tar_notes = unpack_notes(raw_current_notes)
     supabase.table("big_rocks").update({
-        "notes_progres": notes,
+        "notes_progres": pack_notes(br_notes, tar_notes),
         "pregunta": pregunta,
         "passos": passos,
         "updated_at": now_iso(),
@@ -957,6 +1027,7 @@ def save_bigrock_notes(br_id, notes, pregunta, passos):
 def export_month_dataframe(username, month):
     rows = []
     for br in get_brs(username, month):
+        br_notes, tar_notes = unpack_notes(br.get("notes_progres"))
         for tar in get_tars(br["id"], active_only=True):
             rows.append({
                 "usuari": username,
@@ -967,7 +1038,8 @@ def export_month_dataframe(username, month):
                 "tar": tar.get("num"),
                 "descripcio": tar.get("descripcio"),
                 "progres": tar.get("progres"),
-                "notes_progres": br.get("notes_progres"),
+                "notes_tar": tar_notes.get(str(tar.get("id")), ""),
+                "notes_progres": br_notes,
                 "pregunta": br.get("pregunta"),
                 "passos": br.get("passos"),
             })
@@ -1022,7 +1094,7 @@ if st.session_state.usuari_actual is None:
 
         with tab1:
             with st.form("login_form"):
-                usuari = st.text_input(t("usr"), placeholder="marc.llopis")
+                usuari = st.text_input(t("usr"), placeholder="nom.cognom")
                 contrasenya = st.text_input(t("pwd"), type="password", placeholder="********")
                 submitted = st.form_submit_button(t("enter"), type="primary", use_container_width=True)
                 if submitted:
@@ -1156,6 +1228,116 @@ with st.sidebar:
         st.rerun()
 
 # ============================================================
+# INFORMES
+# ============================================================
+
+def render_report(title, allow_close=False):
+    st.title(f"{title} · {MES}")
+
+    brs = get_brs(USUARI, MES)
+    tars_completats = []
+    tars_pendents = []
+    tars_en_curs = []
+    sumatori_progres = 0
+    total_tars = 0
+
+    for br in brs:
+        for tar in get_tars(br["id"], active_only=True):
+            desc = tar.get("descripcio") or ""
+            progres = int(tar.get("progres") or 0)
+            sumatori_progres += progres
+            total_tars += 1
+            if progres == 100:
+                tars_completats.append((br.get("nom") or "", desc))
+            elif progres == 0:
+                tars_pendents.append((br.get("nom") or "", desc, progres))
+            else:
+                tars_en_curs.append((br.get("nom") or "", desc, progres))
+
+    compliment_global = int(sumatori_progres / total_tars) if total_tars else 0
+    st.markdown(f"### {t('global_comp')}")
+    progress_bar(compliment_global, f"{compliment_global}%")
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.success(t("successes"))
+        if tars_completats:
+            for nom, desc in tars_completats:
+                st.markdown(f"- **{nom}** → {desc}")
+        else:
+            st.caption("-")
+    with c2:
+        st.info(t("in_progress"))
+        if tars_en_curs:
+            for nom, desc, progres in tars_en_curs:
+                st.markdown(f"- **{nom}** → {desc} ({progres}%)")
+        else:
+            st.caption("-")
+    with c3:
+        st.warning(t("carry_over"))
+        if tars_pendents:
+            for nom, desc, progres in tars_pendents:
+                st.markdown(f"- **{nom}** → {desc} ({progres}%)")
+        else:
+            st.caption("-")
+
+    def confirm_month_close():
+        close_month(USUARI, MES)
+        nou_mes = next_month(MES, st.session_state.idioma)
+        for br in get_brs(USUARI, MES):
+            pendents = [tar for tar in get_tars(br["id"], active_only=True) if int(tar.get("progres") or 0) < 100]
+            if pendents:
+                existing_notes, _ = unpack_notes(br.get("notes_progres"))
+                payload = {
+                    "username": USUARI,
+                    "mes": nou_mes,
+                    "nom": br.get("nom") or "",
+                    "persones": br.get("persones") or "",
+                    "reunions": br.get("reunions") or "",
+                    "notes_progres": pack_notes(existing_notes, {}),
+                    "pregunta": br.get("pregunta") or "",
+                    "passos": br.get("passos") or "",
+                    "created_at": now_iso(),
+                    "updated_at": now_iso(),
+                }
+                res = supabase.table("big_rocks").insert(payload).execute()
+                data = s_data(res)
+                if data:
+                    new_br_id = data[0]["id"]
+                    rows = []
+                    for tar in pendents:
+                        rows.append({
+                            "id_br": new_br_id,
+                            "num": tar.get("num") or "TAR",
+                            "descripcio": tar.get("descripcio") or "",
+                            "progres": int(tar.get("progres") or 0),
+                            "estat": "Actiu",
+                            "created_at": now_iso(),
+                            "updated_at": now_iso(),
+                        })
+                    if rows:
+                        supabase.table("tars").insert(rows).execute()
+        st.session_state.mes_actual = nou_mes
+        st.session_state.pantalla = "dashboard"
+        st.rerun()
+
+    st.write("")
+    if allow_close:
+        cb1, cb2, _ = st.columns([1, 2, 1])
+        with cb1:
+            if st.button(t("cancel"), use_container_width=True):
+                st.session_state.pantalla = "dashboard"
+                st.rerun()
+        with cb2:
+            st.button(t("confirm_close"), on_click=confirm_month_close, type="primary", use_container_width=True)
+    else:
+        cb1, _, _ = st.columns([1, 2, 1])
+        with cb1:
+            if st.button(t("back"), use_container_width=True):
+                st.session_state.pantalla = "dashboard"
+                st.rerun()
+
+# ============================================================
 # PANTALLA PRINCIPAL
 # ============================================================
 
@@ -1189,13 +1371,17 @@ if st.session_state.pantalla == "dashboard":
         kpi_card(t("pending_tars"), pending)
 
     st.write("")
-    action_col1, action_col2, _ = st.columns([1.35, 1.2, 3])
+    action_col1, action_col2, action_col3, _ = st.columns([1.35, 1.35, 1.2, 2.5])
     with action_col1:
         if not es_tancat:
             if st.button(t("eval_close"), type="primary", use_container_width=True):
                 st.session_state.pantalla = "resum"
                 st.rerun()
     with action_col2:
+        if st.button(t("eval_no_close"), use_container_width=True):
+            st.session_state.pantalla = "informe"
+            st.rerun()
+    with action_col3:
         df_export = export_month_dataframe(USUARI, MES)
         if not df_export.empty:
             st.download_button(
@@ -1228,6 +1414,7 @@ if st.session_state.pantalla == "dashboard":
     else:
         for br in brs:
             br_id = br["id"]
+            br_notes, tar_notes = unpack_notes(br.get("notes_progres"))
             tars = get_tars(br_id, active_only=True)
             progres_mitja = int(sum(int(tar.get("progres") or 0) for tar in tars) / len(tars)) if tars else 0
 
@@ -1246,21 +1433,9 @@ if st.session_state.pantalla == "dashboard":
             for tar in tars:
                 tar_id = tar["id"]
                 progres = int(tar.get("progres") or 0)
-                progres = progres if progres in [0, 50, 100] else 0
+                progres = progres if progres in [0, 25, 50, 75, 100] else 0
                 st.markdown("<div class='tar-card'>", unsafe_allow_html=True)
-                top_a, top_b = st.columns([1, 1])
-                with top_a:
-                    st.markdown(f"<div class='tar-badge'>{tar.get('num') or ''}</div>", unsafe_allow_html=True)
-                with top_b:
-                    if not es_tancat:
-                        st.button(
-                            t("archive"),
-                            key=f"btn_archive_{tar_id}",
-                            on_click=archive_tar,
-                            args=(tar_id,),
-                            help=t("delete_help"),
-                            use_container_width=True,
-                        )
+                st.markdown(f"<div class='tar-badge'>{tar.get('num') or ''}</div>", unsafe_allow_html=True)
                 k_desc = f"desc_{tar_id}"
                 st.text_input(
                     t("desc"),
@@ -1274,9 +1449,9 @@ if st.session_state.pantalla == "dashboard":
                 k_radio = f"radio_{tar_id}"
                 st.radio(
                     t("state"),
-                    options=[0, 50, 100],
+                    options=[0, 25, 50, 75, 100],
                     format_func=lambda x: f"{x}%",
-                    index=[0, 50, 100].index(progres),
+                    index=[0, 25, 50, 75, 100].index(progres),
                     horizontal=True,
                     key=k_radio,
                     label_visibility="collapsed",
@@ -1284,18 +1459,33 @@ if st.session_state.pantalla == "dashboard":
                     on_change=lambda tid=tar_id, k=k_radio: update_db_val("tars", "progres", st.session_state[k], tid),
                 )
                 progress_bar(progres)
+
+                with st.expander(t("tar_notes"), expanded=False):
+                    note_key = f"tar_note_{tar_id}"
+                    st.text_area(
+                        t("tar_notes"),
+                        value=tar_notes.get(str(tar_id), ""),
+                        key=note_key,
+                        disabled=es_tancat,
+                        placeholder=t("tar_notes_placeholder"),
+                        label_visibility="collapsed",
+                    )
+                    if not es_tancat:
+                        if st.button(t("save_tar_notes"), key=f"save_tar_note_{tar_id}"):
+                            save_tar_note(br_id, tar_id, st.session_state[note_key])
+                            st.success(t("saved"))
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with st.expander(t("details"), expanded=False):
                 notes_key = f"notes_{br_id}"
                 preg_key = f"preg_{br_id}"
                 passos_key = f"passos_{br_id}"
-                notes = st.text_area(t("prog"), value=br.get("notes_progres") or "", key=notes_key, disabled=es_tancat)
+                notes = st.text_area(t("prog"), value=br_notes, key=notes_key, disabled=es_tancat)
                 preg = st.text_input(t("need"), value=br.get("pregunta") or "", key=preg_key, disabled=es_tancat)
                 passos_val = st.text_input(t("next_steps"), value=br.get("passos") or "", key=passos_key, disabled=es_tancat)
                 if not es_tancat:
                     if st.button(t("save_notes"), key=f"save_{br_id}"):
-                        save_bigrock_notes(br_id, notes, preg, passos_val)
+                        save_bigrock_notes(br_id, br.get("notes_progres"), notes, preg, passos_val)
                         st.success(t("saved"))
 
     if not es_tancat:
@@ -1315,106 +1505,34 @@ if st.session_state.pantalla == "dashboard":
                 t2 = st.text_input("TAR 2", placeholder=t("tar_placeholder"))
                 t3 = st.text_input("TAR 3", placeholder=t("tar_placeholder"))
                 t4 = st.text_input("TAR 4", placeholder=t("tar_placeholder"))
+                st.markdown(f"### {t('details')}")
+                br_notes_new = st.text_area(t("prog"), placeholder=t("prog"))
+                pregunta_new = st.text_input(t("need"), placeholder=t("need"))
+                passos_new = st.text_input(t("next_steps"), placeholder=t("next_steps"))
                 submitted = st.form_submit_button(t("save"), type="primary", use_container_width=True)
                 if submitted:
                     if not nou_nom.strip():
                         st.error(t("title_br"))
                     else:
                         try:
-                            create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4])
+                            create_bigrock(
+                                USUARI,
+                                MES,
+                                nou_nom.strip(),
+                                persones.strip(),
+                                reunions.strip(),
+                                [t1, t2, t3, t4],
+                                br_notes_new,
+                                pregunta_new,
+                                passos_new,
+                            )
                             st.session_state.mostrar_formulari_br = False
                             st.rerun()
                         except Exception as e:
                             st.error(db_error_message(e))
 
-# ============================================================
-# RESUM I TANCAMENT DE MES
-# ============================================================
+elif st.session_state.pantalla == "informe":
+    render_report(t("report_title"), allow_close=False)
 
 elif st.session_state.pantalla == "resum":
-    st.title(f"{t('summary')} · {MES}")
-
-    brs = get_brs(USUARI, MES)
-    tars_completats = []
-    tars_pendents = []
-    sumatori_progres = 0
-    total_tars = 0
-
-    for br in brs:
-        for tar in get_tars(br["id"], active_only=True):
-            desc = tar.get("descripcio") or ""
-            progres = int(tar.get("progres") or 0)
-            sumatori_progres += progres
-            total_tars += 1
-            if progres == 100:
-                tars_completats.append((br.get("nom") or "", desc))
-            else:
-                tars_pendents.append((br.get("nom") or "", desc, progres))
-
-    compliment_global = int(sumatori_progres / total_tars) if total_tars else 0
-    st.markdown(f"### {t('global_comp')}")
-    progress_bar(compliment_global, f"{compliment_global}%")
-
-    ce, ct = st.columns(2)
-    with ce:
-        st.success(t("successes"))
-        if tars_completats:
-            for nom, desc in tars_completats:
-                st.markdown(f"- **{nom}** → {desc}")
-        else:
-            st.caption("-")
-    with ct:
-        st.warning(t("carry_over"))
-        if tars_pendents:
-            for nom, desc, progres in tars_pendents:
-                st.markdown(f"- **{nom}** → {desc} ({progres}%)")
-        else:
-            st.caption("-")
-
-    def confirm_month_close():
-        close_month(USUARI, MES)
-        nou_mes = next_month(MES, st.session_state.idioma)
-        for br in get_brs(USUARI, MES):
-            pendents = [tar for tar in get_tars(br["id"], active_only=True) if int(tar.get("progres") or 0) < 100]
-            if pendents:
-                payload = {
-                    "username": USUARI,
-                    "mes": nou_mes,
-                    "nom": br.get("nom") or "",
-                    "persones": br.get("persones") or "",
-                    "reunions": br.get("reunions") or "",
-                    "notes_progres": "",
-                    "pregunta": "",
-                    "passos": "",
-                    "created_at": now_iso(),
-                    "updated_at": now_iso(),
-                }
-                res = supabase.table("big_rocks").insert(payload).execute()
-                data = s_data(res)
-                if data:
-                    new_br_id = data[0]["id"]
-                    rows = []
-                    for tar in pendents:
-                        rows.append({
-                            "id_br": new_br_id,
-                            "num": tar.get("num") or "TAR",
-                            "descripcio": tar.get("descripcio") or "",
-                            "progres": int(tar.get("progres") or 0),
-                            "estat": "Actiu",
-                            "created_at": now_iso(),
-                            "updated_at": now_iso(),
-                        })
-                    if rows:
-                        supabase.table("tars").insert(rows).execute()
-        st.session_state.mes_actual = nou_mes
-        st.session_state.pantalla = "dashboard"
-        st.rerun()
-
-    st.write("")
-    cb1, cb2, _ = st.columns([1, 2, 1])
-    with cb1:
-        if st.button(t("cancel"), use_container_width=True):
-            st.session_state.pantalla = "dashboard"
-            st.rerun()
-    with cb2:
-        st.button(t("confirm_close"), on_click=confirm_month_close, type="primary", use_container_width=True)
+    render_report(t("summary"), allow_close=True)
