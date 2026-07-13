@@ -1,19 +1,7 @@
 
 import base64
 import hashlib
-init_db()
-
 import os
-
-st.write("PATH BD:", os.path.abspath(DB_PATH))
-st.write("EXISTEIX:", os.path.exists(DB_PATH))
-
-try:
-
-	usuaris = fetch_query("SELECT username FROM usuaris")
-	st.write("USUARIS:", usuaris)
-except Exception as e:
-	st.write("ERROR:", e)
 import sqlite3
 from datetime import datetime
 
@@ -21,11 +9,13 @@ import pandas as pd
 import streamlit as st
 
 # ============================================================
-# BIG ROCKS - SORIGUE
-# APP.py complet - versio responsive i corregida per mobile
+# BIG ROCKS - SORIGUE | APP.py V11
+# Versio neta amb diagnostic de BD, login corregit i disseny responsive
 # ============================================================
 
 DB_PATH = "bigrocks.db"
+DEBUG_DB = True  # Posa False quan ja hagis comprovat la BD i no vulguis mostrar el diagnostic.
+
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
 PRIMARY_HOVER = "#43B8ED"
@@ -33,7 +23,7 @@ TEXT = "#232323"
 GREY = "#53565A"
 BORDER = "#BBBBBB"
 SUCCESS = "#03A446"
-WARNING = "#CE9F00"
+WARNING = "#D9AF00"
 ERROR = "#E53A4F"
 LIGHT_BLUE = "#E7F2F7"
 
@@ -45,18 +35,19 @@ LOGO_NEGATIVE_CANDIDATES = [
 ]
 LOGO_POSITIVE_CANDIDATES = [
     "sorigue_logo_RGB-positivo.png",
+    "sorigue_logo_RGB-positivo - copia.png",
     "sorigue_logo.png",
 ]
 
 st.set_page_config(
     page_title="Big Rocks - Sorigué",
     layout="wide",
-    page_icon="🪨",
+    page_icon="BR",
     initial_sidebar_state="expanded",
 )
 
 # ============================================================
-# 1. TRADUCCIONS
+# TRADUCCIONS
 # ============================================================
 
 TRANS = {
@@ -122,8 +113,8 @@ TRANS = {
         "help_title": "Consell d'usabilitat",
         "help_body": "Mantingues les Big Rocks concretes: objectiu clar, persones clau i 3-4 TARs mesurables.",
         "empty_cta": "Crea la primera Big Rock",
-        "month_status": "Estat del mes",
         "brand_subtitle": "Seguiment d'objectius",
+        "diagnostic": "Diagnòstic BD",
         "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
     "es": {
@@ -188,8 +179,8 @@ TRANS = {
         "help_title": "Consejo de usabilidad",
         "help_body": "Mantén las Big Rocks concretas: objetivo claro, personas clave y 3-4 TARs medibles.",
         "empty_cta": "Crea la primera Big Rock",
-        "month_status": "Estado del mes",
         "brand_subtitle": "Seguimiento de objetivos",
+        "diagnostic": "Diagnóstico BD",
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
 }
@@ -200,7 +191,7 @@ def t(key):
     return TRANS.get(lang, TRANS["ca"]).get(key, key)
 
 # ============================================================
-# 2. CSS CORPORATIU I CORRECCIONS MOBILE
+# CSS CORPORATIU I MOBILE
 # ============================================================
 
 def inject_css():
@@ -222,7 +213,6 @@ def inject_css():
     --s-light-blue: {LIGHT_BLUE};
 }}
 
-/* Important: no forcem la font als icons interns de Streamlit, per evitar textos tipus keyboard_double_arrow_right */
 html, body, input, textarea, button, select {{
     font-family: 'Montserrat', Arial, sans-serif !important;
 }}
@@ -236,6 +226,7 @@ p, label, h1, h2, h3, h4, h5, h6,
     font-family: 'Montserrat', Arial, sans-serif !important;
 }}
 
+/* Evita que les icones internes de Streamlit es converteixin en text tipus keyboard_double_arrow_right */
 .material-symbols-rounded,
 .material-symbols-outlined,
 .material-icons,
@@ -247,9 +238,7 @@ p, label, h1, h2, h3, h4, h5, h6,
     line-height: 1 !important;
     letter-spacing: normal !important;
     text-transform: none !important;
-    display: inline-block !important;
     white-space: nowrap !important;
-    word-wrap: normal !important;
     direction: ltr !important;
     -webkit-font-feature-settings: 'liga' !important;
     -webkit-font-smoothing: antialiased !important;
@@ -282,14 +271,10 @@ h3 {{
     color: var(--s-text) !important;
 }}
 
-/* Amaguem elements de Streamlit Cloud que embruten la vista en mobile */
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
-[data-testid="stToolbar"] {{display: none !important;}}
-[data-testid="stDecoration"] {{display: none !important;}}
-[data-testid="stStatusWidget"] {{display: none !important;}}
+[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {{display: none !important;}}
 
-/* Sidebar */
 [data-testid="stSidebar"] {{
     background: linear-gradient(180deg, var(--s-primary) 0%, #08A7E8 100%) !important;
 }}
@@ -326,7 +311,7 @@ footer {{visibility: hidden;}}
 }}
 
 .sidebar-app-subtitle {{
-    color: rgba(255,255,255,.86);
+    color: rgba(255,255,255,.88);
     font-size: 13px;
     text-align: center;
     margin-bottom: 22px;
@@ -352,7 +337,6 @@ footer {{visibility: hidden;}}
     font-weight: 700;
 }}
 
-/* Selectbox: fons blanc, text fosc, fletxa visible. Especialment dins sidebar. */
 [data-baseweb="select"] > div {{
     background: #FFFFFF !important;
     border: 1px solid var(--s-border) !important;
@@ -376,10 +360,7 @@ footer {{visibility: hidden;}}
 [data-baseweb="select"] span,
 [data-baseweb="select"] div,
 [data-testid="stSidebar"] [data-baseweb="select"] span,
-[data-testid="stSidebar"] [data-baseweb="select"] div {{
-    color: var(--s-text) !important;
-}}
-
+[data-testid="stSidebar"] [data-baseweb="select"] div,
 [data-testid="stSidebar"] [data-baseweb="select"] input {{
     color: var(--s-text) !important;
 }}
@@ -399,7 +380,6 @@ footer {{visibility: hidden;}}
     box-shadow: 0 0 0 1px #359ECE !important;
 }}
 
-/* Botons Sorigue */
 .stButton > button,
 [data-testid="stFormSubmitButton"] button,
 .stDownloadButton > button {{
@@ -439,7 +419,6 @@ footer {{visibility: hidden;}}
     background: rgba(255,255,255,0.22) !important;
 }}
 
-/* Cards */
 .bigrock-card {{
     background: #FFFFFF;
     border-left: 6px solid var(--s-primary);
@@ -511,7 +490,7 @@ footer {{visibility: hidden;}}
     min-width: 38px;
 }}
 
-.tar-mobile-card {{
+.tar-card {{
     background: #FFFFFF;
     border: 1px solid #E0E2E3;
     border-radius: 8px;
@@ -570,7 +549,6 @@ footer {{visibility: hidden;}}
     margin-bottom: 4px;
 }}
 
-/* Expander net: sense textos arrow_right/keyboard... ni icones substituides */
 .streamlit-expanderHeader,
 [data-testid="stExpander"] summary {{
     font-family: 'Montserrat', Arial, sans-serif !important;
@@ -580,66 +558,35 @@ footer {{visibility: hidden;}}
     min-height: 44px !important;
 }}
 
-[data-testid="stExpander"] details {{
-    border-radius: 8px !important;
-}}
-
 [data-testid="stRadio"] label {{
     color: var(--s-text) !important;
 }}
 
-/* Mobile */
 @media (max-width: 768px) {{
     .block-container {{
         padding-top: .9rem;
         padding-left: 1rem;
         padding-right: 1rem;
     }}
-    h1 {{
-        font-size: 32px !important;
-        line-height: 38px !important;
-    }}
-    .kpi-card {{
-        min-height: 92px;
-        padding: 14px 15px;
-    }}
-    .kpi-value {{
-        font-size: 28px;
-        line-height: 34px;
-    }}
-    .bigrock-card {{
-        padding: 18px 16px;
-        margin-bottom: 12px;
-    }}
-    .bigrock-title {{
-        font-size: 22px;
-        line-height: 28px;
-    }}
-    .sidebar-logo-text {{
-        font-size: 42px;
-        margin-top: 12px;
-    }}
-    .sidebar-status-card {{
-        margin: 10px 0 14px 0;
-    }}
-    [data-testid="stSidebar"] {{
-        min-width: 305px !important;
-        max-width: 305px !important;
-    }}
-    [data-testid="stSidebar"] .block-container {{
-        padding-top: 1rem;
-    }}
+    h1 {{ font-size: 32px !important; line-height: 38px !important; }}
+    .kpi-card {{ min-height: 92px; padding: 14px 15px; }}
+    .kpi-value {{ font-size: 28px; line-height: 34px; }}
+    .bigrock-card {{ padding: 18px 16px; margin-bottom: 12px; }}
+    .bigrock-title {{ font-size: 22px; line-height: 28px; }}
+    .sidebar-logo-text {{ font-size: 42px; margin-top: 12px; }}
+    .sidebar-status-card {{ margin: 10px 0 14px 0; }}
+    [data-testid="stSidebar"] {{ min-width: 305px !important; max-width: 305px !important; }}
+    [data-testid="stSidebar"] .block-container {{ padding-top: 1rem; }}
 }}
 </style>
 """,
         unsafe_allow_html=True,
     )
 
-
 inject_css()
 
 # ============================================================
-# 3. BASE DE DADES I SEGURETAT
+# BASE DE DADES I SEGURETAT
 # ============================================================
 
 def get_conn():
@@ -680,11 +627,13 @@ def hash_password(password, salt=None):
 
 
 def verify_password(password, stored_password, stored_salt=None):
-    # Compatibilitat amb usuaris antics: si no hi ha salt, valida password en text pla i despres migra.
     if stored_salt is None or stored_salt == "":
         return password == stored_password
-    _, digest = hash_password(password, stored_salt)
-    return digest == stored_password
+    try:
+        _, digest = hash_password(password, stored_salt)
+        return digest == stored_password
+    except Exception:
+        return False
 
 
 def init_db():
@@ -697,7 +646,8 @@ def init_db():
             password TEXT,
             language TEXT DEFAULT 'ca',
             password_salt TEXT,
-            created_at TEXT
+            created_at TEXT,
+            last_login TEXT
         )
         """
     )
@@ -747,7 +697,7 @@ def init_db():
     conn.close()
 
     migrations = {
-        "usuaris": [("language", "TEXT DEFAULT 'ca'"), ("password_salt", "TEXT"), ("created_at", "TEXT")],
+        "usuaris": [("language", "TEXT DEFAULT 'ca'"), ("password_salt", "TEXT"), ("created_at", "TEXT"), ("last_login", "TEXT")],
         "big_rocks": [("created_at", "TEXT"), ("updated_at", "TEXT")],
         "tars": [("created_at", "TEXT"), ("updated_at", "TEXT")],
         "mesos_tancats": [("closed_at", "TEXT")],
@@ -760,11 +710,28 @@ def init_db():
                 except sqlite3.OperationalError:
                     pass
 
-
+# IMPORTANT: init_db() ha d'anar aqui, quan totes les funcions de BD ja existeixen.
 init_db()
 
+# Diagnostic BD integrat. Es mostra a pantalla, no trenca el login i ajuda a comprovar si Streamlit ha creat una BD buida.
+def show_db_diagnostic(location="main"):
+    if not DEBUG_DB:
+        return
+    try:
+        users = fetch_query("SELECT username, language, created_at, last_login FROM usuaris ORDER BY username")
+        br_count = fetch_query("SELECT COUNT(*) FROM big_rocks")[0][0]
+        tar_count = fetch_query("SELECT COUNT(*) FROM tars")[0][0]
+        with st.expander(f"{t('diagnostic')} · {location}", expanded=False):
+            st.code(f"PATH BD: {os.path.abspath(DB_PATH)}")
+            st.write("EXISTEIX:", os.path.exists(DB_PATH))
+            st.write("USUARIS:", users)
+            st.write("TOTAL BIG ROCKS:", br_count)
+            st.write("TOTAL TARs:", tar_count)
+    except Exception as e:
+        st.warning(f"Error llegint diagnòstic BD: {e}")
+
 # ============================================================
-# 4. UTILITATS
+# UTILITATS
 # ============================================================
 
 def now_iso():
@@ -822,12 +789,11 @@ def progress_color(progress):
 def progress_bar(progress, label=None):
     progress = int(progress or 0)
     color = progress_color(progress)
-    text_color = "#FFFFFF"
     label_text = label if label else f"{progress}%"
     st.markdown(
         f"""
         <div class="s-progress">
-            <div class="s-progress-inner" style="width:{max(progress, 4)}%; background:{color}; color:{text_color};">
+            <div class="s-progress-inner" style="width:{max(progress, 4)}%; background:{color}; color:#FFFFFF;">
                 {label_text}
             </div>
         </div>
@@ -964,7 +930,7 @@ def export_month_dataframe(username, month):
     return pd.DataFrame(rows)
 
 # ============================================================
-# 5. SESSION STATE
+# SESSION STATE
 # ============================================================
 
 if "usuari_actual" not in st.session_state:
@@ -979,7 +945,7 @@ if "mes_actual" not in st.session_state:
     st.session_state.mes_actual = get_month_key(st.session_state.idioma)
 
 # ============================================================
-# 6. LOGIN I REGISTRE
+# LOGIN I REGISTRE
 # ============================================================
 
 if st.session_state.usuari_actual is None:
@@ -996,6 +962,7 @@ if st.session_state.usuari_actual is None:
             unsafe_allow_html=True,
         )
         st.write("")
+        show_db_diagnostic("login")
         tab1, tab2 = st.tabs([t("login_tab"), t("reg_tab")])
 
         with tab1:
@@ -1004,23 +971,25 @@ if st.session_state.usuari_actual is None:
                 contrasenya = st.text_input(t("pwd"), type="password", placeholder="********")
                 submitted = st.form_submit_button(t("enter"), type="primary", use_container_width=True)
                 if submitted:
-                    if not usuari.strip() or not contrasenya.strip():
+                    username_clean = usuari.strip()
+                    if not username_clean or not contrasenya.strip():
                         st.error(t("required_fields"))
                     else:
                         user_data = fetch_query(
                             "SELECT password, password_salt, language FROM usuaris WHERE username=?",
-                            (usuari.strip(),),
+                            (username_clean,),
                         )
                         if user_data and verify_password(contrasenya, user_data[0][0], user_data[0][1]):
-                            st.session_state.usuari_actual = usuari.strip()
+                            st.session_state.usuari_actual = username_clean
                             st.session_state.idioma = user_data[0][2] if user_data[0][2] else "ca"
                             st.session_state.mes_actual = get_month_key(st.session_state.idioma)
                             st.session_state.pantalla = "dashboard"
+                            run_query("UPDATE usuaris SET last_login=? WHERE username=?", (now_iso(), username_clean))
                             if not user_data[0][1]:
                                 salt, digest = hash_password(contrasenya)
                                 run_query(
                                     "UPDATE usuaris SET password=?, password_salt=? WHERE username=?",
-                                    (digest, salt, usuari.strip()),
+                                    (digest, salt, username_clean),
                                 )
                             st.rerun()
                         else:
@@ -1037,17 +1006,18 @@ if st.session_state.usuari_actual is None:
                 )
                 submitted = st.form_submit_button(t("register"), type="primary", use_container_width=True)
                 if submitted:
-                    if not nou_usuari.strip() or not nova_contra.strip():
+                    username_clean = nou_usuari.strip()
+                    if not username_clean or not nova_contra.strip():
                         st.error(t("required_fields"))
                     else:
                         try:
                             salt, digest = hash_password(nova_contra)
                             run_query(
                                 """
-                                INSERT INTO usuaris (username, password, language, password_salt, created_at)
-                                VALUES (?, ?, ?, ?, ?)
+                                INSERT INTO usuaris (username, password, language, password_salt, created_at, last_login)
+                                VALUES (?, ?, ?, ?, ?, NULL)
                                 """,
-                                (nou_usuari.strip(), digest, nou_idioma, salt, now_iso()),
+                                (username_clean, digest, nou_idioma, salt, now_iso()),
                             )
                             st.success(t("succ_reg"))
                         except sqlite3.IntegrityError:
@@ -1055,14 +1025,14 @@ if st.session_state.usuari_actual is None:
     st.stop()
 
 # ============================================================
-# 7. SIDEBAR
+# SIDEBAR
 # ============================================================
 
 USUARI = st.session_state.usuari_actual
 
 with st.sidebar:
     st.markdown(logo_for_sidebar(), unsafe_allow_html=True)
-    st.markdown(f"<div class='sidebar-app-title'>BIG ROCKS</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-app-title'>BIG ROCKS</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='sidebar-app-subtitle'>{t('brand_subtitle')}</div>", unsafe_allow_html=True)
 
     st.markdown(
@@ -1134,6 +1104,9 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
+    if DEBUG_DB:
+        show_db_diagnostic("sidebar")
+
     st.markdown("<div style='height:34px;'></div>", unsafe_allow_html=True)
     if st.button(t("logout"), use_container_width=True):
         for key in ["usuari_actual", "pantalla", "mostrar_formulari_br"]:
@@ -1142,7 +1115,7 @@ with st.sidebar:
         st.rerun()
 
 # ============================================================
-# 8. DASHBOARD PRINCIPAL
+# PANTALLA PRINCIPAL
 # ============================================================
 
 MES = st.session_state.mes_actual
@@ -1229,11 +1202,10 @@ if st.session_state.pantalla == "dashboard":
             )
             progress_bar(progres_mitja, f"{progres_mitja}%")
 
-            # TARs en format vertical perque sigui net a mobil i tambe acceptable a desktop
             for tar in tars:
                 tar_id, num, desc, progres = tar
                 progres = int(progres) if int(progres) in [0, 50, 100] else 0
-                st.markdown("<div class='tar-mobile-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='tar-card'>", unsafe_allow_html=True)
                 top_a, top_b = st.columns([1, 1])
                 with top_a:
                     st.markdown(f"<div class='tar-badge'>{num}</div>", unsafe_allow_html=True)
@@ -1244,7 +1216,6 @@ if st.session_state.pantalla == "dashboard":
                             key=f"btn_archive_{tar_id}",
                             on_click=archive_tar,
                             args=(tar_id,),
-                            disabled=es_tancat,
                             help=t("delete_help"),
                             use_container_width=True,
                         )
@@ -1273,7 +1244,6 @@ if st.session_state.pantalla == "dashboard":
                 progress_bar(progres)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            # Expander sense icona manual ni prefixos que puguin solapar-se
             with st.expander(t("details"), expanded=False):
                 notes_key = f"notes_{br_id}"
                 preg_key = f"preg_{br_id}"
@@ -1332,7 +1302,7 @@ if st.session_state.pantalla == "dashboard":
                         st.rerun()
 
 # ============================================================
-# 9. RESUM I TANCAMENT DE MES
+# RESUM I TANCAMENT DE MES
 # ============================================================
 
 elif st.session_state.pantalla == "resum":
@@ -1382,8 +1352,7 @@ elif st.session_state.pantalla == "resum":
             (USUARI, MES, now_iso()),
         )
         nou_mes = next_month(MES, st.session_state.idioma)
-        brs_actuals = get_brs(USUARI, MES)
-        for br in brs_actuals:
+        for br in get_brs(USUARI, MES):
             br_id, nom, persones, reunions, *_ = br
             pendents_db = fetch_query(
                 "SELECT num, descripcio, progres FROM tars WHERE id_br=? AND estat='Actiu' AND progres < 100 ORDER BY id ASC",
