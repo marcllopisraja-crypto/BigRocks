@@ -1,7 +1,19 @@
 
 import base64
 import hashlib
+init_db()
+
 import os
+
+st.write("PATH BD:", os.path.abspath(DB_PATH))
+st.write("EXISTEIX:", os.path.exists(DB_PATH))
+
+try:
+
+	usuaris = fetch_query("SELECT username FROM usuaris")
+	st.write("USUARIS:", usuaris)
+except Exception as e:
+	st.write("ERROR:", e)
 import sqlite3
 from datetime import datetime
 
