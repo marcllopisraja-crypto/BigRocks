@@ -11,8 +11,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V18
-# Supabase + mesos independents idioma + TARs corporatives
+# BIG ROCKS - SORIGUE | APP.py V19
+# Supabase + desplegament BR corregit + mesos independents idioma
 # ============================================================
 
 DEBUG_DB = False
@@ -713,6 +713,14 @@ def change_language():
     if previous_month:
         st.session_state.mes_actual = normalize_month_to_lang(previous_month, selected)
 
+
+def toggle_bigrock(br_id):
+    """Obre/tanca una Big Rock conservant l'estat entre reruns."""
+    current = st.session_state.get("open_br_id")
+    current = str(current) if current is not None else None
+    target = str(br_id)
+    st.session_state.open_br_id = None if current == target else target
+
 # ============================================================
 # SESSION STATE
 # ============================================================
@@ -727,6 +735,8 @@ if "mostrar_formulari_br" not in st.session_state:
     st.session_state.mostrar_formulari_br = False
 if "mes_actual" not in st.session_state:
     st.session_state.mes_actual = get_month_key(st.session_state.idioma)
+else:
+    st.session_state.mes_actual = parse_month_to_canonical(st.session_state.mes_actual)
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 
@@ -822,6 +832,7 @@ with st.sidebar:
     mes_ini = get_month_key(st.session_state.idioma)
     if mes_ini not in mesos_disponibles:
         mesos_disponibles.insert(0, mes_ini)
+    st.session_state.mes_actual = parse_month_to_canonical(st.session_state.mes_actual)
     if st.session_state.mes_actual not in mesos_disponibles:
         st.session_state.mes_actual = mes_ini
 
@@ -832,6 +843,7 @@ with st.sidebar:
         key="mes_selector",
         format_func=lambda x: month_display(x, st.session_state.idioma),
     )
+    mes_seleccionat = parse_month_to_canonical(mes_seleccionat)
     if mes_seleccionat != st.session_state.mes_actual:
         st.session_state.open_br_id = None
     st.session_state.mes_actual = mes_seleccionat
@@ -1039,14 +1051,18 @@ if st.session_state.pantalla == "dashboard":
             tar_list = tars_by_br.get(br_id, [])
             stats = stats_from_tars(tar_list)
             progres_mitja = stats["avg"]
-            is_open = st.session_state.open_br_id == br_id
+            is_open = str(st.session_state.get("open_br_id")) == str(br_id)
             br_notes, tar_notes = unpack_notes(br.get("notes_progres"))
             icon = "▼" if is_open else "▶"
             label = f"{icon} {br.get('nom') or ''}\n{status_dot(progres_mitja)} {progres_mitja}%   ·   {stats['total']} TARs   ·   {stats['completed']} completades   ·   {stats['in_progress']} en curs   ·   {stats['pending']} pendents"
             st.markdown('<div class="open-card-button">', unsafe_allow_html=True)
-            if st.button(label, key=f"card_br_{br_id}", use_container_width=True):
-                st.session_state.open_br_id = None if is_open else br_id
-                st.rerun()
+            st.button(
+                label,
+                key=f"card_br_{br_id}",
+                use_container_width=True,
+                on_click=toggle_bigrock,
+                args=(br_id,),
+            )
             st.markdown('</div>', unsafe_allow_html=True)
 
             if not is_open:
@@ -1101,7 +1117,7 @@ if st.session_state.pantalla == "dashboard":
                 if submit_bigrock:
                     try:
                         save_bigrock_form(br_id, br.get("notes_progres"), st.session_state.get(notes_key, ""), st.session_state.get(preg_key, ""), st.session_state.get(passos_key, ""), tar_updates, tar_note_updates)
-                        st.session_state.open_br_id = br_id
+                        st.session_state.open_br_id = str(br_id)
                         st.success(t("saved"))
                         st.rerun()
                     except Exception as e:
@@ -1135,7 +1151,7 @@ if st.session_state.pantalla == "dashboard":
                         try:
                             new_id = create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4], br_notes_new, pregunta_new, passos_new)
                             st.session_state.mostrar_formulari_br = False
-                            st.session_state.open_br_id = new_id
+                            st.session_state.open_br_id = str(new_id)
                             st.rerun()
                         except Exception as e:
                             st.error(db_error_message(e))
