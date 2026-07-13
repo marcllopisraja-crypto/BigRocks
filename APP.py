@@ -3,20 +3,17 @@ import base64
 import hashlib
 import os
 import sqlite3
-import time
 from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 
-# ==========================================
+# ============================================================
 # BIG ROCKS - SORIGUE
-# Versio completa millorada a partir d'APPv8
-# ==========================================
+# APP.py complet - versio responsive i corregida per mobile
+# ============================================================
 
-APP_TITLE = "Big Rocks - Sorigue"
 DB_PATH = "bigrocks.db"
-LOGO_FILE = "sorigue_logo_RGB-positivo.png"
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
 PRIMARY_HOVER = "#43B8ED"
@@ -26,24 +23,35 @@ BORDER = "#BBBBBB"
 SUCCESS = "#03A446"
 WARNING = "#CE9F00"
 ERROR = "#E53A4F"
-INFO_BG = "#E7F2F7"
+LIGHT_BLUE = "#E7F2F7"
+
+LOGO_NEGATIVE_CANDIDATES = [
+    "sorigue_logo_RGB-negativo.png",
+    "sorigue_logo_negativo.png",
+    "sorigue_logo_blanc.png",
+    "sorigue_blanc.png",
+]
+LOGO_POSITIVE_CANDIDATES = [
+    "sorigue_logo_RGB-positivo.png",
+    "sorigue_logo.png",
+]
 
 st.set_page_config(
-    page_title="Big Rocks - Sorigue",
+    page_title="Big Rocks - Sorigué",
     layout="wide",
-    page_icon="BR",
+    page_icon="🪨",
     initial_sidebar_state="expanded",
 )
 
-# ==========================================
-# 1. DICCIONARI DE TRADUCCIONS
-# ==========================================
+# ============================================================
+# 1. TRADUCCIONS
+# ============================================================
 
 TRANS = {
     "ca": {
-        "login_title": "Acces a la Plataforma",
+        "login_title": "Accés a la Plataforma",
         "login_subtitle": "Seguiment mensual dels teus Big Rocks i TARs",
-        "login_tab": "Iniciar sessio",
+        "login_tab": "Iniciar sessió",
         "reg_tab": "Registrar nou usuari",
         "usr": "Nom d'usuari",
         "pwd": "Contrasenya",
@@ -52,108 +60,105 @@ TRANS = {
         "enter": "Entrar",
         "register": "Registrar",
         "err_login": "Usuari o contrasenya incorrectes.",
-        "succ_reg": "Usuari creat correctament. Ara pots iniciar sessio.",
+        "succ_reg": "Usuari creat correctament. Ara pots iniciar sessió.",
         "err_reg": "Aquest nom d'usuari ja existeix.",
         "required_fields": "Introdueix usuari i contrasenya per continuar.",
         "conn_as": "Connectat com:",
         "lang": "Idioma",
         "nav_months": "Navegar pels mesos",
-        "closed_month": "Aquest mes esta tancat.",
+        "closed_month": "Aquest mes està tancat.",
         "unlock": "Desbloquejar mes",
         "open_month": "Mes obert i editable",
-        "logout": "Tancar sessio",
+        "logout": "Tancar sessió",
         "eval_close": "Avaluar i tancar mes",
         "no_br_title": "Encara no tens cap Big Rock creada",
-        "no_br_body": "Crea la primera Big Rock per comencar el seguiment mensual.",
+        "no_br_body": "Crea la primera Big Rock per començar el seguiment mensual.",
         "key_ppl": "Persones clau",
         "key_meet": "Reunions",
         "global_prog": "Assoliment global",
         "state": "Estat",
-        "desc": "Descripcio de la tasca",
-        "details": "Detalls, preguntes i proxims passos",
-        "prog": "Progres",
+        "desc": "Descripció de la tasca",
+        "details": "Detalls, preguntes i pròxims passos",
+        "prog": "Progrés",
         "need": "Pregunta o necessitat",
-        "next_steps": "Proxims passos",
+        "next_steps": "Pròxims passos",
         "save_notes": "Guardar notes",
         "create_br": "Crear nova Big Rock",
         "config_br": "Configura la teva nova Big Rock",
-        "title_br": "Titol de la Big Rock",
+        "title_br": "Títol de la Big Rock",
         "save": "Guardar Big Rock",
         "summary": "Resum de tancament",
         "global_comp": "Grau de compliment global",
-        "successes": "Exits completats",
+        "successes": "Èxits completats",
         "carry_over": "Es traspassen",
-        "cancel": "Cancel.lar i tornar",
-        "confirm_close": "Confirmar tancament i crear mes seguent",
-        "dashboard": "Dashboard",
+        "cancel": "Cancel·lar i tornar",
+        "confirm_close": "Confirmar tancament i crear mes següent",
         "active_brs": "Big Rocks actives",
         "completed_tars": "TARs completats",
         "pending_tars": "TARs pendents",
-        "avg_progress": "Progres mitja",
+        "avg_progress": "Progrés mitjà",
         "export_csv": "Exportar CSV",
         "archive": "Arxivar",
         "delete_help": "Arxivar aquesta TAR",
-        "tar": "TAR",
         "people_placeholder": "Ex. Xavier, Gerard, equip nord...",
-        "meetings_placeholder": "Ex. Seguiment setmanal, comite mensual...",
-        "title_placeholder": "Ex. Reduir incidencies critiques de l'obra",
-        "tar_placeholder": "Descriu una accio concreta i mesurable",
+        "meetings_placeholder": "Ex. Seguiment setmanal, comitè mensual...",
+        "title_placeholder": "Ex. Reduir incidències crítiques de l'obra",
+        "tar_placeholder": "Descriu una acció concreta i mesurable",
         "saved": "Canvis guardats correctament.",
-        "month_label": "Mes",
         "status_open": "Obert",
         "status_closed": "Tancat",
-        "home": "Inici",
         "help_title": "Consell d'usabilitat",
         "help_body": "Mantingues les Big Rocks concretes: objectiu clar, persones clau i 3-4 TARs mesurables.",
         "empty_cta": "Crea la primera Big Rock",
-        "months": ["Gener", "Febrer", "Marc", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
+        "month_status": "Estat del mes",
+        "brand_subtitle": "Seguiment d'objectius",
+        "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
     "es": {
         "login_title": "Acceso a la Plataforma",
         "login_subtitle": "Seguimiento mensual de tus Big Rocks y TARs",
-        "login_tab": "Iniciar sesion",
+        "login_tab": "Iniciar sesión",
         "reg_tab": "Registrar nuevo usuario",
         "usr": "Nombre de usuario",
-        "pwd": "Contrasena",
+        "pwd": "Contraseña",
         "new_usr": "Nuevo nombre de usuario",
         "lang_reg": "Idioma por defecto",
         "enter": "Entrar",
         "register": "Registrar",
-        "err_login": "Usuario o contrasena incorrectos.",
-        "succ_reg": "Usuario creado correctamente. Ahora puedes iniciar sesion.",
+        "err_login": "Usuario o contraseña incorrectos.",
+        "succ_reg": "Usuario creado correctamente. Ahora puedes iniciar sesión.",
         "err_reg": "Este nombre de usuario ya existe.",
-        "required_fields": "Introduce usuario y contrasena para continuar.",
+        "required_fields": "Introduce usuario y contraseña para continuar.",
         "conn_as": "Conectado como:",
         "lang": "Idioma",
         "nav_months": "Navegar por los meses",
-        "closed_month": "Este mes esta cerrado.",
+        "closed_month": "Este mes está cerrado.",
         "unlock": "Desbloquear mes",
         "open_month": "Mes abierto y editable",
-        "logout": "Cerrar sesion",
+        "logout": "Cerrar sesión",
         "eval_close": "Evaluar y cerrar mes",
-        "no_br_title": "Aun no tienes ninguna Big Rock creada",
+        "no_br_title": "Aún no tienes ninguna Big Rock creada",
         "no_br_body": "Crea la primera Big Rock para empezar el seguimiento mensual.",
         "key_ppl": "Personas clave",
         "key_meet": "Reuniones",
         "global_prog": "Avance global",
         "state": "Estado",
-        "desc": "Descripcion de la tarea",
-        "details": "Detalles, preguntas y proximos pasos",
+        "desc": "Descripción de la tarea",
+        "details": "Detalles, preguntas y próximos pasos",
         "prog": "Progreso",
         "need": "Pregunta o necesidad",
-        "next_steps": "Proximos pasos",
+        "next_steps": "Próximos pasos",
         "save_notes": "Guardar notas",
         "create_br": "Crear nueva Big Rock",
         "config_br": "Configura tu nueva Big Rock",
-        "title_br": "Titulo de la Big Rock",
+        "title_br": "Título de la Big Rock",
         "save": "Guardar Big Rock",
         "summary": "Resumen de cierre",
         "global_comp": "Grado de cumplimiento global",
-        "successes": "Exitos completados",
+        "successes": "Éxitos completados",
         "carry_over": "Se traspasan",
         "cancel": "Cancelar y volver",
         "confirm_close": "Confirmar cierre y crear mes siguiente",
-        "dashboard": "Dashboard",
         "active_brs": "Big Rocks activas",
         "completed_tars": "TARs completados",
         "pending_tars": "TARs pendientes",
@@ -161,19 +166,18 @@ TRANS = {
         "export_csv": "Exportar CSV",
         "archive": "Archivar",
         "delete_help": "Archivar esta TAR",
-        "tar": "TAR",
         "people_placeholder": "Ej. Xavier, Gerard, equipo norte...",
-        "meetings_placeholder": "Ej. Seguimiento semanal, comite mensual...",
-        "title_placeholder": "Ej. Reducir incidencias criticas de la obra",
-        "tar_placeholder": "Describe una accion concreta y medible",
+        "meetings_placeholder": "Ej. Seguimiento semanal, comité mensual...",
+        "title_placeholder": "Ej. Reducir incidencias críticas de la obra",
+        "tar_placeholder": "Describe una acción concreta y medible",
         "saved": "Cambios guardados correctamente.",
-        "month_label": "Mes",
         "status_open": "Abierto",
         "status_closed": "Cerrado",
-        "home": "Inicio",
         "help_title": "Consejo de usabilidad",
         "help_body": "Mantén las Big Rocks concretas: objetivo claro, personas clave y 3-4 TARs medibles.",
         "empty_cta": "Crea la primera Big Rock",
+        "month_status": "Estado del mes",
+        "brand_subtitle": "Seguimiento de objetivos",
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
 }
@@ -183,10 +187,9 @@ def t(key):
     lang = st.session_state.get("idioma", "ca")
     return TRANS.get(lang, TRANS["ca"]).get(key, key)
 
-
-# ==========================================
-# 2. CSS CORPORATIU SORIGUE
-# ==========================================
+# ============================================================
+# 2. CSS CORPORATIU I CORRECCIONS MOBILE
+# ============================================================
 
 def inject_css():
     st.markdown(
@@ -204,62 +207,122 @@ def inject_css():
     --s-success: {SUCCESS};
     --s-warning: {WARNING};
     --s-error: {ERROR};
+    --s-light-blue: {LIGHT_BLUE};
 }}
 
-html, body, [class*="css"], [class*="st-"], input, textarea, button, select {{
+/* Important: no forcem la font als icons interns de Streamlit, per evitar textos tipus keyboard_double_arrow_right */
+html, body, input, textarea, button, select {{
     font-family: 'Montserrat', Arial, sans-serif !important;
 }}
 
-.block-container {{
-    padding-top: 2.2rem;
-    padding-bottom: 3rem;
-    max-width: 1400px;
+p, label, h1, h2, h3, h4, h5, h6,
+[data-testid="stMarkdownContainer"],
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-baseweb="select"] div,
+[data-baseweb="select"] span {{
+    font-family: 'Montserrat', Arial, sans-serif !important;
 }}
 
-h1, h2, h3, h4 {{
-    color: var(--s-text) !important;
-    letter-spacing: 0 !important;
+.material-symbols-rounded,
+.material-symbols-outlined,
+.material-icons,
+[data-testid="collapsedControl"] span,
+[data-testid="stExpanderToggleIcon"] span {{
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+    direction: ltr !important;
+    -webkit-font-feature-settings: 'liga' !important;
+    -webkit-font-smoothing: antialiased !important;
+}}
+
+.block-container {{
+    padding-top: 1.8rem;
+    padding-bottom: 3rem;
+    max-width: 1360px;
 }}
 
 h1 {{
     font-size: 42px !important;
     line-height: 50px !important;
     font-weight: 700 !important;
+    color: var(--s-text) !important;
 }}
 
 h2 {{
     font-size: 28px !important;
     line-height: 34px !important;
     font-weight: 700 !important;
+    color: var(--s-text) !important;
 }}
 
 h3 {{
     font-size: 20px !important;
     line-height: 28px !important;
     font-weight: 600 !important;
+    color: var(--s-text) !important;
 }}
 
-p, label, span, div {{
-    line-height: 1.5;
-}}
+/* Amaguem elements de Streamlit Cloud que embruten la vista en mobile */
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+[data-testid="stToolbar"] {{display: none !important;}}
+[data-testid="stDecoration"] {{display: none !important;}}
+[data-testid="stStatusWidget"] {{display: none !important;}}
 
 /* Sidebar */
 [data-testid="stSidebar"] {{
     background: linear-gradient(180deg, var(--s-primary) 0%, #08A7E8 100%) !important;
 }}
 
-[data-testid="stSidebar"] * {{
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] .sidebar-white {{
     color: #FFFFFF !important;
 }}
 
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
 [data-testid="stSidebar"] label {{
-    font-weight: 600 !important;
+    font-weight: 700 !important;
+}}
+
+.sidebar-logo-text {{
+    color: #FFFFFF;
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    margin: 20px 0 8px 0;
+    letter-spacing: -1.5px;
+}}
+
+.sidebar-app-title {{
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 4px;
+}}
+
+.sidebar-app-subtitle {{
+    color: rgba(255,255,255,.86);
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 22px;
 }}
 
 .sidebar-status-card {{
     background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.38);
     border-radius: 8px;
     padding: 14px 16px;
     margin: 14px 0 18px 0;
@@ -268,16 +331,16 @@ p, label, span, div {{
 .sidebar-pill {{
     display: inline-flex;
     align-items: center;
-    gap: 8px;
     border-radius: 999px;
-    padding: 7px 11px;
+    padding: 7px 13px;
     background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #FFFFFF;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
 }}
 
-/* Selectbox/input: fletxa visible i contrast correcte */
+/* Selectbox: fons blanc, text fosc, fletxa visible. Especialment dins sidebar. */
 [data-baseweb="select"] > div {{
     background: #FFFFFF !important;
     border: 1px solid var(--s-border) !important;
@@ -299,12 +362,13 @@ p, label, span, div {{
 }}
 
 [data-baseweb="select"] span,
-[data-baseweb="select"] div {{
+[data-baseweb="select"] div,
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] div {{
     color: var(--s-text) !important;
 }}
 
-[data-testid="stSidebar"] [data-baseweb="select"] span,
-[data-testid="stSidebar"] [data-baseweb="select"] div {{
+[data-testid="stSidebar"] [data-baseweb="select"] input {{
     color: var(--s-text) !important;
 }}
 
@@ -314,6 +378,7 @@ p, label, span, div {{
     border: 1px solid var(--s-border) !important;
     color: var(--s-text) !important;
     background: #FFFFFF !important;
+    min-height: 40px !important;
 }}
 
 [data-testid="stTextInput"] input:focus,
@@ -329,8 +394,7 @@ p, label, span, div {{
     border-radius: 4px !important;
     min-height: 38px !important;
     padding: 8px 14px !important;
-    font-weight: 600 !important;
-    letter-spacing: .01em !important;
+    font-weight: 700 !important;
     border: 1px solid var(--s-primary) !important;
     background: var(--s-primary) !important;
     color: #FFFFFF !important;
@@ -355,7 +419,7 @@ p, label, span, div {{
 
 [data-testid="stSidebar"] .stButton > button {{
     background: rgba(255,255,255,0.10) !important;
-    border: 1px solid rgba(255,255,255,0.45) !important;
+    border: 1px solid rgba(255,255,255,0.48) !important;
     color: #FFFFFF !important;
 }}
 
@@ -369,7 +433,7 @@ p, label, span, div {{
     border-left: 6px solid var(--s-primary);
     border-radius: 8px;
     padding: 22px 24px;
-    margin: 0 0 18px 0;
+    margin: 0 0 16px 0;
     box-shadow: 0 2px 9px rgba(35,35,35,.08);
     border-top: 1px solid #EEF2F4;
     border-right: 1px solid #EEF2F4;
@@ -386,7 +450,7 @@ p, label, span, div {{
 .bigrock-meta {{
     color: var(--s-grey);
     font-size: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }}
 
 .kpi-card {{
@@ -395,13 +459,13 @@ p, label, span, div {{
     padding: 18px 20px;
     box-shadow: 0 2px 9px rgba(35,35,35,.08);
     border-top: 4px solid var(--s-primary);
-    min-height: 118px;
+    min-height: 112px;
 }}
 
 .kpi-label {{
     color: var(--s-grey);
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .02em;
 }}
@@ -432,7 +496,16 @@ p, label, span, div {{
     font-weight: 700;
     font-size: 13px;
     color: #FFFFFF;
-    min-width: 36px;
+    min-width: 38px;
+}}
+
+.tar-mobile-card {{
+    background: #FFFFFF;
+    border: 1px solid #E0E2E3;
+    border-radius: 8px;
+    padding: 12px 14px 8px 14px;
+    margin: 10px 0 14px 0;
+    box-shadow: 0 1px 4px rgba(35,35,35,.04);
 }}
 
 .tar-badge {{
@@ -440,12 +513,13 @@ p, label, span, div {{
     align-items: center;
     justify-content: center;
     border-radius: 5px;
-    background: #E7F2F7;
+    background: var(--s-light-blue);
     color: var(--s-primary-dark);
     font-weight: 700;
-    padding: 7px 10px;
+    padding: 7px 11px;
     min-width: 64px;
     font-size: 13px;
+    margin-bottom: 8px;
 }}
 
 .empty-state {{
@@ -466,45 +540,83 @@ p, label, span, div {{
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 38px;
+    font-size: 34px;
     font-weight: 700;
     margin-bottom: 20px;
 }}
 
 .help-box {{
-    background: #E7F2F7;
-    border: 1px solid #216D8C;
+    background: var(--s-light-blue);
+    border: 1px solid var(--s-primary-dark);
     border-radius: 4px;
     padding: 14px 16px;
-    margin-top: 0;
 }}
 
 .help-box-title {{
-    color: #216D8C;
+    color: var(--s-primary-dark);
     font-weight: 700;
     margin-bottom: 4px;
 }}
 
-.stAlert {{
-    border-radius: 4px !important;
+/* Expander net: sense textos arrow_right/keyboard... ni icones substituides */
+.streamlit-expanderHeader,
+[data-testid="stExpander"] summary {{
+    font-family: 'Montserrat', Arial, sans-serif !important;
+    font-weight: 700 !important;
+    color: var(--s-text) !important;
+    line-height: 24px !important;
+    min-height: 44px !important;
 }}
 
-/* Radios */
+[data-testid="stExpander"] details {{
+    border-radius: 8px !important;
+}}
+
 [data-testid="stRadio"] label {{
     color: var(--s-text) !important;
 }}
 
-/* Expander */
-.streamlit-expanderHeader {{
-    font-weight: 600 !important;
-    color: var(--s-text) !important;
-}}
-
+/* Mobile */
 @media (max-width: 768px) {{
-    .block-container {{ padding-top: 1.2rem; }}
-    h1 {{ font-size: 32px !important; line-height: 38px !important; }}
-    .kpi-value {{ font-size: 28px; }}
-    .bigrock-card {{ padding: 18px 16px; }}
+    .block-container {{
+        padding-top: .9rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }}
+    h1 {{
+        font-size: 32px !important;
+        line-height: 38px !important;
+    }}
+    .kpi-card {{
+        min-height: 92px;
+        padding: 14px 15px;
+    }}
+    .kpi-value {{
+        font-size: 28px;
+        line-height: 34px;
+    }}
+    .bigrock-card {{
+        padding: 18px 16px;
+        margin-bottom: 12px;
+    }}
+    .bigrock-title {{
+        font-size: 22px;
+        line-height: 28px;
+    }}
+    .sidebar-logo-text {{
+        font-size: 42px;
+        margin-top: 12px;
+    }}
+    .sidebar-status-card {{
+        margin: 10px 0 14px 0;
+    }}
+    [data-testid="stSidebar"] {{
+        min-width: 305px !important;
+        max-width: 305px !important;
+    }}
+    [data-testid="stSidebar"] .block-container {{
+        padding-top: 1rem;
+    }}
 }}
 </style>
 """,
@@ -514,9 +626,9 @@ p, label, span, div {{
 
 inject_css()
 
-# ==========================================
+# ============================================================
 # 3. BASE DE DADES I SEGURETAT
-# ==========================================
+# ============================================================
 
 def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -556,7 +668,7 @@ def hash_password(password, salt=None):
 
 
 def verify_password(password, stored_password, stored_salt=None):
-    # Compatibilitat amb usuaris antics d'APPv8: password en text pla
+    # Compatibilitat amb usuaris antics: si no hi ha salt, valida password en text pla i despres migra.
     if stored_salt is None or stored_salt == "":
         return password == stored_password
     _, digest = hash_password(password, stored_salt)
@@ -622,24 +734,11 @@ def init_db():
     conn.commit()
     conn.close()
 
-    # Migracions suaus per bases antigues
     migrations = {
-        "usuaris": [
-            ("language", "TEXT DEFAULT 'ca'"),
-            ("password_salt", "TEXT"),
-            ("created_at", "TEXT"),
-        ],
-        "big_rocks": [
-            ("created_at", "TEXT"),
-            ("updated_at", "TEXT"),
-        ],
-        "tars": [
-            ("created_at", "TEXT"),
-            ("updated_at", "TEXT"),
-        ],
-        "mesos_tancats": [
-            ("closed_at", "TEXT"),
-        ],
+        "usuaris": [("language", "TEXT DEFAULT 'ca'"), ("password_salt", "TEXT"), ("created_at", "TEXT")],
+        "big_rocks": [("created_at", "TEXT"), ("updated_at", "TEXT")],
+        "tars": [("created_at", "TEXT"), ("updated_at", "TEXT")],
+        "mesos_tancats": [("closed_at", "TEXT")],
     }
     for table, cols in migrations.items():
         for col, col_type in cols:
@@ -652,9 +751,9 @@ def init_db():
 
 init_db()
 
-# ==========================================
-# 4. UTILITATS VISUALS I DADES
-# ==========================================
+# ============================================================
+# 4. UTILITATS
+# ============================================================
 
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")
@@ -704,18 +803,19 @@ def progress_color(progress):
     if progress <= 50:
         return WARNING
     if progress <= 90:
-        return "#FFD200"
+        return "#D9AF00"
     return SUCCESS
 
 
 def progress_bar(progress, label=None):
+    progress = int(progress or 0)
     color = progress_color(progress)
-    text_color = "#232323" if 51 <= progress <= 90 else "#FFFFFF"
+    text_color = "#FFFFFF"
     label_text = label if label else f"{progress}%"
     st.markdown(
         f"""
         <div class="s-progress">
-            <div class="s-progress-inner" style="width:{max(progress, 3)}%; background:{color}; color:{text_color};">
+            <div class="s-progress-inner" style="width:{max(progress, 4)}%; background:{color}; color:{text_color};">
                 {label_text}
             </div>
         </div>
@@ -724,12 +824,32 @@ def progress_bar(progress, label=None):
     )
 
 
-def logo_html(width=210):
-    if os.path.exists(LOGO_FILE):
-        with open(LOGO_FILE, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode()
-        return f'<img src="data:image/png;base64,{b64}" style="width:{width}px; max-width:100%; display:block; margin: 0 auto 22px auto;">'
-    return f'<div style="font-size:46px; font-weight:700; color:white; text-align:center; margin-bottom:22px;">sorigue</div>'
+def file_to_b64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
+def find_existing(candidates):
+    for name in candidates:
+        if os.path.exists(name):
+            return name
+    return None
+
+
+def logo_for_sidebar():
+    negative = find_existing(LOGO_NEGATIVE_CANDIDATES)
+    if negative:
+        b64 = file_to_b64(negative)
+        return f'<img src="data:image/png;base64,{b64}" style="width:220px; max-width:100%; display:block; margin: 12px auto 18px auto;">'
+    return '<div class="sidebar-logo-text">sorigué</div>'
+
+
+def logo_for_login():
+    positive = find_existing(LOGO_POSITIVE_CANDIDATES)
+    if positive:
+        b64 = file_to_b64(positive)
+        return f'<img src="data:image/png;base64,{b64}" style="width:250px; max-width:100%; display:block; margin: 0 auto 22px auto;">'
+    return '<div style="font-size:48px; font-weight:700; color:white; text-align:center; margin-bottom:18px;">sorigué</div>'
 
 
 def kpi_card(label, value):
@@ -774,7 +894,6 @@ def month_is_closed(username, month):
 
 def dashboard_stats(username, month):
     brs = get_brs(username, month)
-    br_count = len(brs)
     all_tars = []
     for br in brs:
         all_tars.extend(get_tars(br[0], active_only=True))
@@ -782,13 +901,13 @@ def dashboard_stats(username, month):
     completed = sum(1 for tar in all_tars if int(tar[3]) == 100)
     pending = sum(1 for tar in all_tars if int(tar[3]) < 100)
     avg = int(sum(int(tar[3]) for tar in all_tars) / total) if total else 0
-    return br_count, completed, pending, avg
+    return len(brs), completed, pending, avg
 
 
 def update_db_val(table, field, val, uid):
     allowed = {
-        "tars": {"descripcio", "progres", "estat", "updated_at"},
-        "big_rocks": {"notes_progres", "pregunta", "passos", "updated_at", "nom", "persones", "reunions"},
+        "tars": {"descripcio", "progres", "estat"},
+        "big_rocks": {"notes_progres", "pregunta", "passos", "nom", "persones", "reunions"},
     }
     if table not in allowed or field not in allowed[table]:
         return
@@ -812,8 +931,7 @@ def change_language():
 
 def export_month_dataframe(username, month):
     rows = []
-    brs = get_brs(username, month)
-    for br in brs:
+    for br in get_brs(username, month):
         br_id, nom, persones, reunions, notes, pregunta, passos = br
         for tar in get_tars(br_id, active_only=True):
             rows.append(
@@ -833,10 +951,9 @@ def export_month_dataframe(username, month):
             )
     return pd.DataFrame(rows)
 
-
-# ==========================================
+# ============================================================
 # 5. SESSION STATE
-# ==========================================
+# ============================================================
 
 if "usuari_actual" not in st.session_state:
     st.session_state.usuari_actual = None
@@ -849,9 +966,9 @@ if "mostrar_formulari_br" not in st.session_state:
 if "mes_actual" not in st.session_state:
     st.session_state.mes_actual = get_month_key(st.session_state.idioma)
 
-# ==========================================
+# ============================================================
 # 6. LOGIN I REGISTRE
-# ==========================================
+# ============================================================
 
 if st.session_state.usuari_actual is None:
     left, center, right = st.columns([1, 1.35, 1])
@@ -859,7 +976,7 @@ if st.session_state.usuari_actual is None:
         st.markdown(
             f"""
             <div style="background:{PRIMARY}; border-radius:10px; padding:36px 38px 34px 38px; margin-top:32px; box-shadow:0 3px 14px rgba(35,35,35,.12);">
-                {logo_html(width=250)}
+                {logo_for_login()}
                 <div style="color:#FFFFFF; font-size:28px; line-height:34px; font-weight:700; text-align:center;">{t('login_title')}</div>
                 <div style="color:#E7F2F7; font-size:14px; line-height:21px; text-align:center; margin-top:8px;">{t('login_subtitle')}</div>
             </div>
@@ -887,8 +1004,6 @@ if st.session_state.usuari_actual is None:
                             st.session_state.idioma = user_data[0][2] if user_data[0][2] else "ca"
                             st.session_state.mes_actual = get_month_key(st.session_state.idioma)
                             st.session_state.pantalla = "dashboard"
-
-                            # Migracio automatica si venia de password en text pla
                             if not user_data[0][1]:
                                 salt, digest = hash_password(contrasenya)
                                 run_query(
@@ -902,11 +1017,11 @@ if st.session_state.usuari_actual is None:
         with tab2:
             with st.form("register_form"):
                 nou_usuari = st.text_input(t("new_usr"), placeholder="nom.cognom")
-                nova_contra = st.text_input(t("pwd"), type="password", placeholder="Minim recomanat: 8 caracters")
+                nova_contra = st.text_input(t("pwd"), type="password", placeholder="Mínim recomanat: 8 caràcters")
                 nou_idioma = st.selectbox(
                     t("lang_reg"),
                     options=["ca", "es"],
-                    format_func=lambda x: "Catala" if x == "ca" else "Espanol",
+                    format_func=lambda x: "Català" if x == "ca" else "Español",
                 )
                 submitted = st.form_submit_button(t("register"), type="primary", use_container_width=True)
                 if submitted:
@@ -927,20 +1042,23 @@ if st.session_state.usuari_actual is None:
                             st.error(t("err_reg"))
     st.stop()
 
-# ==========================================
+# ============================================================
 # 7. SIDEBAR
-# ==========================================
+# ============================================================
 
 USUARI = st.session_state.usuari_actual
 
 with st.sidebar:
-    st.markdown(logo_html(width=230), unsafe_allow_html=True)
+    st.markdown(logo_for_sidebar(), unsafe_allow_html=True)
+    st.markdown(f"<div class='sidebar-app-title'>BIG ROCKS</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sidebar-app-subtitle'>{t('brand_subtitle')}</div>", unsafe_allow_html=True)
+
     st.markdown(
         f"""
         <div class="sidebar-status-card">
             <div class="sidebar-pill">Persona</div>
-            <div style="font-size:14px; margin-top:10px; font-weight:500;">{t('conn_as')}</div>
-            <div style="font-size:16px; margin-top:2px; font-weight:700;">{USUARI}</div>
+            <div class="sidebar-white" style="font-size:14px; margin-top:10px; font-weight:500;">{t('conn_as')}</div>
+            <div class="sidebar-white" style="font-size:16px; margin-top:2px; font-weight:700;">{USUARI}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -951,7 +1069,7 @@ with st.sidebar:
         t("lang"),
         ["ca", "es"],
         index=lang_idx,
-        format_func=lambda x: "Catala" if x == "ca" else "Castellano",
+        format_func=lambda x: "Català" if x == "ca" else "Castellano",
         key="idioma_selector",
         on_change=change_language,
     )
@@ -967,7 +1085,6 @@ with st.sidebar:
     mes_ini = get_month_key(st.session_state.idioma)
     if mes_ini not in mesos_disponibles:
         mesos_disponibles.insert(0, mes_ini)
-
     if st.session_state.mes_actual not in mesos_disponibles:
         st.session_state.mes_actual = mes_ini
 
@@ -983,7 +1100,12 @@ with st.sidebar:
 
     if es_tancat:
         st.markdown(
-            f"<div class='sidebar-status-card'><strong>{t('status_closed')}</strong><br>{t('closed_month')}</div>",
+            f"""
+            <div class='sidebar-status-card'>
+                <div class='sidebar-white' style='font-weight:700;'>{t('status_closed')}</div>
+                <div class='sidebar-white' style='margin-top:5px;'>{t('closed_month')}</div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
         if st.button(t("unlock"), use_container_width=True):
@@ -991,28 +1113,33 @@ with st.sidebar:
             st.rerun()
     else:
         st.markdown(
-            f"<div class='sidebar-status-card'><strong>{t('status_open')}</strong><br>{t('open_month')}</div>",
+            f"""
+            <div class='sidebar-status-card'>
+                <div class='sidebar-white' style='font-weight:700;'>{t('status_open')}</div>
+                <div class='sidebar-white' style='margin-top:5px;'>{t('open_month')}</div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height:140px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:34px;'></div>", unsafe_allow_html=True)
     if st.button(t("logout"), use_container_width=True):
         for key in ["usuari_actual", "pantalla", "mostrar_formulari_br"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
 
-# ==========================================
+# ============================================================
 # 8. DASHBOARD PRINCIPAL
-# ==========================================
+# ============================================================
 
 MES = st.session_state.mes_actual
 es_tancat = month_is_closed(USUARI, MES)
 
 if st.session_state.pantalla == "dashboard":
-    col_title, col_help = st.columns([2.3, 1])
+    col_title, col_help = st.columns([2.25, 1])
     with col_title:
-        st.title(f"{t('dashboard')} · {MES}")
+        st.title(f"Big Rocks · {MES}")
     with col_help:
         st.markdown(
             f"""
@@ -1036,7 +1163,7 @@ if st.session_state.pantalla == "dashboard":
         kpi_card(t("pending_tars"), pending)
 
     st.write("")
-    action_col1, action_col2, action_col3 = st.columns([1.2, 1.2, 3])
+    action_col1, action_col2, _ = st.columns([1.35, 1.2, 3])
     with action_col1:
         if not es_tancat:
             if st.button(t("eval_close"), type="primary", use_container_width=True):
@@ -1054,7 +1181,6 @@ if st.session_state.pantalla == "dashboard":
             )
 
     st.write("")
-
     brs = get_brs(USUARI, MES)
 
     if not brs:
@@ -1085,56 +1211,58 @@ if st.session_state.pantalla == "dashboard":
                     <div class="bigrock-title">{nom}</div>
                     <div class="bigrock-meta"><strong>{t('key_ppl')}:</strong> {persones or '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {reunions or '-'}</div>
                     <div style="font-weight:700; color:#53565A; font-size:13px; text-transform:uppercase;">{t('global_prog')}</div>
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
             progress_bar(progres_mitja, f"{progres_mitja}%")
-            st.markdown("</div>", unsafe_allow_html=True)
 
-            if tars:
-                for tar in tars:
-                    tar_id, num, desc, progres = tar
-                    progres = int(progres) if int(progres) in [0, 50, 100] else 0
-                    col1, col2, col3, col4, col5 = st.columns([1.2, 5, 2.5, 2.2, 0.8])
-                    with col1:
-                        st.markdown(f"<div class='tar-badge'>{num}</div>", unsafe_allow_html=True)
-                    with col2:
-                        k_desc = f"desc_{tar_id}"
-                        st.text_input(
-                            t("desc"),
-                            value=desc,
-                            key=k_desc,
-                            label_visibility="collapsed",
-                            disabled=es_tancat,
-                            placeholder=t("desc"),
-                            on_change=lambda tid=tar_id, k=k_desc: update_db_val("tars", "descripcio", st.session_state[k], tid),
-                        )
-                    with col3:
-                        k_radio = f"radio_{tar_id}"
-                        st.radio(
-                            t("state"),
-                            options=[0, 50, 100],
-                            format_func=lambda x: f"{x}%",
-                            index=[0, 50, 100].index(progres),
-                            horizontal=True,
-                            key=k_radio,
-                            label_visibility="collapsed",
-                            disabled=es_tancat,
-                            on_change=lambda tid=tar_id, k=k_radio: update_db_val("tars", "progres", st.session_state[k], tid),
-                        )
-                    with col4:
-                        progress_bar(progres)
-                    with col5:
+            # TARs en format vertical perque sigui net a mobil i tambe acceptable a desktop
+            for tar in tars:
+                tar_id, num, desc, progres = tar
+                progres = int(progres) if int(progres) in [0, 50, 100] else 0
+                st.markdown("<div class='tar-mobile-card'>", unsafe_allow_html=True)
+                top_a, top_b = st.columns([1, 1])
+                with top_a:
+                    st.markdown(f"<div class='tar-badge'>{num}</div>", unsafe_allow_html=True)
+                with top_b:
+                    if not es_tancat:
                         st.button(
-                            "x",
+                            t("archive"),
                             key=f"btn_archive_{tar_id}",
                             on_click=archive_tar,
                             args=(tar_id,),
                             disabled=es_tancat,
                             help=t("delete_help"),
+                            use_container_width=True,
                         )
+                k_desc = f"desc_{tar_id}"
+                st.text_input(
+                    t("desc"),
+                    value=desc,
+                    key=k_desc,
+                    label_visibility="collapsed",
+                    disabled=es_tancat,
+                    placeholder=t("desc"),
+                    on_change=lambda tid=tar_id, k=k_desc: update_db_val("tars", "descripcio", st.session_state[k], tid),
+                )
+                k_radio = f"radio_{tar_id}"
+                st.radio(
+                    t("state"),
+                    options=[0, 50, 100],
+                    format_func=lambda x: f"{x}%",
+                    index=[0, 50, 100].index(progres),
+                    horizontal=True,
+                    key=k_radio,
+                    label_visibility="collapsed",
+                    disabled=es_tancat,
+                    on_change=lambda tid=tar_id, k=k_radio: update_db_val("tars", "progres", st.session_state[k], tid),
+                )
+                progress_bar(progres)
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            with st.expander(f"+ {t('details')}", expanded=False):
+            # Expander sense icona manual ni prefixos que puguin solapar-se
+            with st.expander(t("details"), expanded=False):
                 notes_key = f"notes_{br_id}"
                 preg_key = f"preg_{br_id}"
                 passos_key = f"passos_{br_id}"
@@ -1155,46 +1283,45 @@ if st.session_state.pantalla == "dashboard":
             st.session_state.mostrar_formulari_br = not st.session_state.mostrar_formulari_br
 
         if st.session_state.mostrar_formulari_br:
-            with st.container():
-                st.subheader(t("config_br"))
-                with st.form("form_nova_br"):
-                    nou_nom = st.text_input(t("title_br"), placeholder=t("title_placeholder"))
-                    c1, c2 = st.columns(2)
-                    persones = c1.text_input(t("key_ppl"), placeholder=t("people_placeholder"))
-                    reunions = c2.text_input(t("key_meet"), placeholder=t("meetings_placeholder"))
-                    st.markdown("### TARs")
-                    t1 = st.text_input("TAR 1", placeholder=t("tar_placeholder"))
-                    t2 = st.text_input("TAR 2", placeholder=t("tar_placeholder"))
-                    t3 = st.text_input("TAR 3", placeholder=t("tar_placeholder"))
-                    t4 = st.text_input("TAR 4", placeholder=t("tar_placeholder"))
-                    submitted = st.form_submit_button(t("save"), type="primary", use_container_width=True)
-                    if submitted:
-                        if not nou_nom.strip():
-                            st.error(t("title_br"))
-                        else:
-                            br_id = run_query(
-                                """
-                                INSERT INTO big_rocks
-                                (username, mes, nom, persones, reunions, notes_progres, pregunta, passos, created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, '', '', '', ?, ?)
-                                """,
-                                (USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), now_iso(), now_iso()),
-                            )
-                            for i, desc_tar in enumerate([t1, t2, t3, t4], start=1):
-                                if desc_tar.strip():
-                                    run_query(
-                                        """
-                                        INSERT INTO tars (id_br, num, descripcio, progres, estat, created_at, updated_at)
-                                        VALUES (?, ?, ?, ?, 'Actiu', ?, ?)
-                                        """,
-                                        (br_id, f"TAR {i}", desc_tar.strip(), 0, now_iso(), now_iso()),
-                                    )
-                            st.session_state.mostrar_formulari_br = False
-                            st.rerun()
+            st.subheader(t("config_br"))
+            with st.form("form_nova_br"):
+                nou_nom = st.text_input(t("title_br"), placeholder=t("title_placeholder"))
+                c1, c2 = st.columns(2)
+                persones = c1.text_input(t("key_ppl"), placeholder=t("people_placeholder"))
+                reunions = c2.text_input(t("key_meet"), placeholder=t("meetings_placeholder"))
+                st.markdown("### TARs")
+                t1 = st.text_input("TAR 1", placeholder=t("tar_placeholder"))
+                t2 = st.text_input("TAR 2", placeholder=t("tar_placeholder"))
+                t3 = st.text_input("TAR 3", placeholder=t("tar_placeholder"))
+                t4 = st.text_input("TAR 4", placeholder=t("tar_placeholder"))
+                submitted = st.form_submit_button(t("save"), type="primary", use_container_width=True)
+                if submitted:
+                    if not nou_nom.strip():
+                        st.error(t("title_br"))
+                    else:
+                        br_id = run_query(
+                            """
+                            INSERT INTO big_rocks
+                            (username, mes, nom, persones, reunions, notes_progres, pregunta, passos, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, '', '', '', ?, ?)
+                            """,
+                            (USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), now_iso(), now_iso()),
+                        )
+                        for i, desc_tar in enumerate([t1, t2, t3, t4], start=1):
+                            if desc_tar.strip():
+                                run_query(
+                                    """
+                                    INSERT INTO tars (id_br, num, descripcio, progres, estat, created_at, updated_at)
+                                    VALUES (?, ?, ?, ?, 'Actiu', ?, ?)
+                                    """,
+                                    (br_id, f"TAR {i}", desc_tar.strip(), 0, now_iso(), now_iso()),
+                                )
+                        st.session_state.mostrar_formulari_br = False
+                        st.rerun()
 
-# ==========================================
+# ============================================================
 # 9. RESUM I TANCAMENT DE MES
-# ==========================================
+# ============================================================
 
 elif st.session_state.pantalla == "resum":
     st.title(f"{t('summary')} · {MES}")
@@ -1218,23 +1345,22 @@ elif st.session_state.pantalla == "resum":
                 tars_pendents.append((nom, desc, progres))
 
     compliment_global = int(sumatori_progres / total_tars) if total_tars else 0
-
     st.markdown(f"### {t('global_comp')}")
     progress_bar(compliment_global, f"{compliment_global}%")
 
     ce, ct = st.columns(2)
     with ce:
-        st.success(f"{t('successes')}")
+        st.success(t("successes"))
         if tars_completats:
             for nom, desc in tars_completats:
-                st.markdown(f"- **{nom}** -> {desc}")
+                st.markdown(f"- **{nom}** → {desc}")
         else:
             st.caption("-")
     with ct:
-        st.warning(f"{t('carry_over')}")
+        st.warning(t("carry_over"))
         if tars_pendents:
             for nom, desc, progres in tars_pendents:
-                st.markdown(f"- **{nom}** -> {desc} ({progres}%)")
+                st.markdown(f"- **{nom}** → {desc} ({progres}%)")
         else:
             st.caption("-")
 
@@ -1273,7 +1399,7 @@ elif st.session_state.pantalla == "resum":
         st.rerun()
 
     st.write("")
-    cb1, cb2, cb3 = st.columns([1, 2, 1])
+    cb1, cb2, _ = st.columns([1, 2, 1])
     with cb1:
         if st.button(t("cancel"), use_container_width=True):
             st.session_state.pantalla = "dashboard"
