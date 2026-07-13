@@ -10,12 +10,13 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V13
-# Supabase + millores UI + informe sense tancar + notes per TAR
+# BIG ROCKS - SORIGUE | APP.py V14
+# Supabase + Big Rocks plegables + sidebar recuperable
 # ============================================================
 
-DEBUG_DB = False  # Posa True nomes si vols veure el diagnostic de Supabase a pantalla.
-USE_IMAGE_LOGO = False  # False evita logos PNG amb fons negre. Mostra sorigue en text blanc.
+DEBUG_DB = False
+USE_IMAGE_LOGO = False
+NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
 
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
@@ -27,7 +28,6 @@ SUCCESS = "#03A446"
 WARNING = "#D9AF00"
 ERROR = "#E53A4F"
 LIGHT_BLUE = "#E7F2F7"
-NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
 
 LOGO_NEGATIVE_CANDIDATES = [
     "sorigue_logo_RGB-negativo.png",
@@ -118,10 +118,14 @@ TRANS = {
         "status_open": "Obert",
         "status_closed": "Tancat",
         "help_title": "Consell d'usabilitat",
-        "help_body": "Mantingues les Big Rocks concretes: objectiu clar, persones clau i 3-4 TARs mesurables.",
+        "help_body": "Obre una Big Rock per veure els detalls i TARs. La resta quedaran plegades perquè la vista sigui més neta.",
         "empty_cta": "Crea la primera Big Rock",
         "brand_subtitle": "Seguiment d'objectius",
         "diagnostic": "Diagnòstic Supabase",
+        "collapse_all": "Plegar totes",
+        "open_bigrock": "Obrir Big Rock",
+        "close_bigrock": "Tancar Big Rock",
+        "sidebar_help": "Si el menú lateral queda amagat, prem el botó superior esquerre de Streamlit. L'hem fet més visible.",
         "supabase_error": "No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets, i que requirements.txt inclogui supabase.",
         "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
@@ -190,10 +194,14 @@ TRANS = {
         "status_open": "Abierto",
         "status_closed": "Cerrado",
         "help_title": "Consejo de usabilidad",
-        "help_body": "Mantén las Big Rocks concretas: objetivo claro, personas clave y 3-4 TARs medibles.",
+        "help_body": "Abre una Big Rock para ver los detalles y TARs. El resto quedarán plegadas para mantener la vista limpia.",
         "empty_cta": "Crea la primera Big Rock",
         "brand_subtitle": "Seguimiento de objetivos",
         "diagnostic": "Diagnóstico Supabase",
+        "collapse_all": "Plegar todas",
+        "open_bigrock": "Abrir Big Rock",
+        "close_bigrock": "Cerrar Big Rock",
+        "sidebar_help": "Si el menú lateral queda oculto, pulsa el botón superior izquierdo de Streamlit. Lo hemos hecho más visible.",
         "supabase_error": "No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets, y que requirements.txt incluya supabase.",
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
@@ -205,7 +213,7 @@ def t(key):
     return TRANS.get(lang, TRANS["ca"]).get(key, key)
 
 # ============================================================
-# CSS CORPORATIU I MOBILE
+# CSS CORPORATIU I SIDEBAR RECUPERABLE
 # ============================================================
 
 def inject_css():
@@ -213,7 +221,6 @@ def inject_css():
         f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
-
 :root {{
     --s-primary: {PRIMARY};
     --s-primary-dark: {PRIMARY_DARK};
@@ -226,388 +233,134 @@ def inject_css():
     --s-error: {ERROR};
     --s-light-blue: {LIGHT_BLUE};
 }}
+html, body, input, textarea, button, select {{font-family:'Montserrat',Arial,sans-serif !important;}}
+p,label,h1,h2,h3,h4,h5,h6,[data-testid="stMarkdownContainer"],[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-baseweb="select"] div,[data-baseweb="select"] span {{font-family:'Montserrat',Arial,sans-serif !important;}}
+.material-symbols-rounded,.material-symbols-outlined,.material-icons,[data-testid="collapsedControl"] span,[data-testid="stExpanderToggleIcon"] span {{
+    font-family:'Material Symbols Rounded','Material Icons' !important;
+    font-weight:normal !important;
+    font-style:normal !important;
+    line-height:1 !important;
+    letter-spacing:normal !important;
+    text-transform:none !important;
+    white-space:nowrap !important;
+    direction:ltr !important;
+    -webkit-font-feature-settings:'liga' !important;
+    -webkit-font-smoothing:antialiased !important;
+}}
+.block-container {{padding-top:1.8rem;padding-bottom:3rem;max-width:1360px;}}
+h1 {{font-size:42px !important;line-height:50px !important;font-weight:700 !important;color:var(--s-text) !important;}}
+h2 {{font-size:28px !important;line-height:34px !important;font-weight:700 !important;color:var(--s-text) !important;}}
+h3 {{font-size:20px !important;line-height:28px !important;font-weight:600 !important;color:var(--s-text) !important;}}
+#MainMenu {{visibility:hidden;}}
+footer {{visibility:hidden;}}
+[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"] {{display:none !important;}}
 
-html, body, input, textarea, button, select {{
-    font-family: 'Montserrat', Arial, sans-serif !important;
+/* Botó nadiu de recuperar sidebar més visible */
+[data-testid="collapsedControl"] {{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    position:fixed !important;
+    top:14px !important;
+    left:14px !important;
+    z-index:999999 !important;
+    width:48px !important;
+    height:48px !important;
+    background:var(--s-primary) !important;
+    border:2px solid #FFFFFF !important;
+    border-radius:999px !important;
+    box-shadow:0 6px 18px rgba(0,0,0,.25) !important;
+}}
+[data-testid="collapsedControl"] svg {{color:#FFFFFF !important;fill:#FFFFFF !important;width:24px !important;height:24px !important;}}
+.sidebar-recover-tip {{
+    position:fixed;
+    top:72px;
+    left:14px;
+    z-index:999998;
+    max-width:245px;
+    background:#ffffff;
+    color:#232323;
+    border:1px solid #C6E0EC;
+    border-left:5px solid var(--s-primary);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12px;
+    line-height:16px;
+    box-shadow:0 4px 14px rgba(0,0,0,.14);
 }}
 
-p, label, h1, h2, h3, h4, h5, h6,
-[data-testid="stMarkdownContainer"],
-[data-testid="stTextInput"] input,
-[data-testid="stTextArea"] textarea,
-[data-baseweb="select"] div,
-[data-baseweb="select"] span {{
-    font-family: 'Montserrat', Arial, sans-serif !important;
-}}
+.login-logo-text {{color:#FFFFFF;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
+[data-testid="stSidebar"] {{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%) !important;}}
+[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3,[data-testid="stSidebar"] .sidebar-white {{color:#FFFFFF !important;}}
+[data-testid="stSidebar"] label {{font-weight:700 !important;}}
+.sidebar-logo-text {{color:#FFFFFF;font-size:48px;font-weight:700;line-height:1;text-align:center;margin:20px 0 8px 0;letter-spacing:-1.5px;}}
+.sidebar-app-title {{color:#FFFFFF;font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}}
+.sidebar-app-subtitle {{color:rgba(255,255,255,.88);font-size:13px;text-align:center;margin-bottom:22px;}}
+.sidebar-status-card {{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.38);border-radius:8px;padding:14px 16px;margin:14px 0 18px 0;}}
+.sidebar-pill {{display:inline-flex;align-items:center;border-radius:999px;padding:7px 13px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);color:#FFFFFF;font-size:13px;font-weight:700;}}
+[data-baseweb="select"] > div {{background:#FFFFFF !important;border:1px solid var(--s-border) !important;border-radius:4px !important;min-height:40px !important;box-shadow:none !important;}}
+[data-baseweb="select"] > div:hover {{border-color:#359ECE !important;}}
+[data-baseweb="select"] svg {{fill:var(--s-grey) !important;color:var(--s-grey) !important;opacity:1 !important;width:18px !important;height:18px !important;}}
+[data-baseweb="select"] span,[data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] span,[data-testid="stSidebar"] [data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] input {{color:var(--s-text) !important;}}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea {{border-radius:4px !important;border:1px solid var(--s-border) !important;color:var(--s-text) !important;background:#FFFFFF !important;min-height:40px !important;}}
+[data-testid="stTextInput"] input:focus,[data-testid="stTextArea"] textarea:focus {{border-color:#359ECE !important;box-shadow:0 0 0 1px #359ECE !important;}}
+.stButton > button,[data-testid="stFormSubmitButton"] button,.stDownloadButton > button {{border-radius:4px !important;min-height:38px !important;padding:8px 14px !important;font-weight:700 !important;border:1px solid var(--s-primary) !important;background:var(--s-primary) !important;color:#FFFFFF !important;transition:all .15s ease-in-out !important;cursor:pointer !important;}}
+.stButton > button:hover,[data-testid="stFormSubmitButton"] button:hover,.stDownloadButton > button:hover {{background:var(--s-primary-hover) !important;border-color:var(--s-primary-hover) !important;color:#FFFFFF !important;}}
+.stButton > button:active,[data-testid="stFormSubmitButton"] button:active,.stDownloadButton > button:active {{background:var(--s-primary-dark) !important;border-color:var(--s-primary-dark) !important;}}
+[data-testid="stSidebar"] .stButton > button {{background:rgba(255,255,255,0.10) !important;border:1px solid rgba(255,255,255,0.48) !important;color:#FFFFFF !important;}}
+[data-testid="stSidebar"] .stButton > button:hover {{background:rgba(255,255,255,0.22) !important;}}
 
-.material-symbols-rounded,
-.material-symbols-outlined,
-.material-icons,
-[data-testid="collapsedControl"] span,
-[data-testid="stExpanderToggleIcon"] span {{
-    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
-    font-weight: normal !important;
-    font-style: normal !important;
-    line-height: 1 !important;
-    letter-spacing: normal !important;
-    text-transform: none !important;
-    white-space: nowrap !important;
-    direction: ltr !important;
-    -webkit-font-feature-settings: 'liga' !important;
-    -webkit-font-smoothing: antialiased !important;
-}}
-
-.block-container {{
-    padding-top: 1.8rem;
-    padding-bottom: 3rem;
-    max-width: 1360px;
-}}
-
-h1 {{
-    font-size: 42px !important;
-    line-height: 50px !important;
-    font-weight: 700 !important;
-    color: var(--s-text) !important;
-}}
-
-h2 {{
-    font-size: 28px !important;
-    line-height: 34px !important;
-    font-weight: 700 !important;
-    color: var(--s-text) !important;
-}}
-
-h3 {{
-    font-size: 20px !important;
-    line-height: 28px !important;
-    font-weight: 600 !important;
-    color: var(--s-text) !important;
-}}
-
-#MainMenu {{visibility: hidden;}}
-footer {{visibility: hidden;}}
-[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {{display: none !important;}}
-
-.login-logo-text {{
-    color: #FFFFFF;
-    font-size: 56px;
-    font-weight: 700;
-    line-height: 1;
-    text-align: center;
-    margin: 0 auto 24px auto;
-    letter-spacing: -2px;
-}}
-
-[data-testid="stSidebar"] {{
-    background: linear-gradient(180deg, var(--s-primary) 0%, #08A7E8 100%) !important;
-}}
-
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] .sidebar-white {{
-    color: #FFFFFF !important;
-}}
-
-[data-testid="stSidebar"] label {{
-    font-weight: 700 !important;
-}}
-
-.sidebar-logo-text {{
-    color: #FFFFFF;
-    font-size: 48px;
-    font-weight: 700;
-    line-height: 1;
-    text-align: center;
-    margin: 20px 0 8px 0;
-    letter-spacing: -1.5px;
-}}
-
-.sidebar-app-title {{
-    color: #FFFFFF;
-    font-size: 18px;
-    font-weight: 700;
-    text-align: center;
-    margin-bottom: 4px;
-}}
-
-.sidebar-app-subtitle {{
-    color: rgba(255,255,255,.88);
-    font-size: 13px;
-    text-align: center;
-    margin-bottom: 22px;
-}}
-
-.sidebar-status-card {{
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.38);
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin: 14px 0 18px 0;
-}}
-
-.sidebar-pill {{
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 7px 13px;
-    background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.35);
-    color: #FFFFFF;
-    font-size: 13px;
-    font-weight: 700;
-}}
-
-[data-baseweb="select"] > div {{
-    background: #FFFFFF !important;
-    border: 1px solid var(--s-border) !important;
-    border-radius: 4px !important;
-    min-height: 40px !important;
-    box-shadow: none !important;
-}}
-
-[data-baseweb="select"] > div:hover {{
-    border-color: #359ECE !important;
-}}
-
-[data-baseweb="select"] svg {{
-    fill: var(--s-grey) !important;
-    color: var(--s-grey) !important;
-    opacity: 1 !important;
-    width: 18px !important;
-    height: 18px !important;
-}}
-
-[data-baseweb="select"] span,
-[data-baseweb="select"] div,
-[data-testid="stSidebar"] [data-baseweb="select"] span,
-[data-testid="stSidebar"] [data-baseweb="select"] div,
-[data-testid="stSidebar"] [data-baseweb="select"] input {{
-    color: var(--s-text) !important;
-}}
-
-[data-testid="stTextInput"] input,
-[data-testid="stTextArea"] textarea {{
-    border-radius: 4px !important;
-    border: 1px solid var(--s-border) !important;
-    color: var(--s-text) !important;
-    background: #FFFFFF !important;
-    min-height: 40px !important;
-}}
-
-[data-testid="stTextInput"] input:focus,
-[data-testid="stTextArea"] textarea:focus {{
-    border-color: #359ECE !important;
-    box-shadow: 0 0 0 1px #359ECE !important;
-}}
-
-.stButton > button,
-[data-testid="stFormSubmitButton"] button,
-.stDownloadButton > button {{
-    border-radius: 4px !important;
-    min-height: 38px !important;
-    padding: 8px 14px !important;
-    font-weight: 700 !important;
-    border: 1px solid var(--s-primary) !important;
-    background: var(--s-primary) !important;
-    color: #FFFFFF !important;
-    transition: all .15s ease-in-out !important;
-    cursor: pointer !important;
-}}
-
-.stButton > button:hover,
-[data-testid="stFormSubmitButton"] button:hover,
-.stDownloadButton > button:hover {{
-    background: var(--s-primary-hover) !important;
-    border-color: var(--s-primary-hover) !important;
-    color: #FFFFFF !important;
-}}
-
-.stButton > button:active,
-[data-testid="stFormSubmitButton"] button:active,
-.stDownloadButton > button:active {{
-    background: var(--s-primary-dark) !important;
-    border-color: var(--s-primary-dark) !important;
-}}
-
-[data-testid="stSidebar"] .stButton > button {{
-    background: rgba(255,255,255,0.10) !important;
-    border: 1px solid rgba(255,255,255,0.48) !important;
-    color: #FFFFFF !important;
-}}
-
-[data-testid="stSidebar"] .stButton > button:hover {{
-    background: rgba(255,255,255,0.22) !important;
-}}
-
-.bigrock-card {{
-    background: #FFFFFF;
-    border-left: 6px solid var(--s-primary);
-    border-radius: 8px;
-    padding: 22px 24px;
-    margin: 0 0 16px 0;
-    box-shadow: 0 2px 9px rgba(35,35,35,.08);
-    border-top: 1px solid #EEF2F4;
-    border-right: 1px solid #EEF2F4;
-    border-bottom: 1px solid #EEF2F4;
-}}
-
-.bigrock-title {{
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--s-text);
-    margin-bottom: 6px;
-}}
-
-.bigrock-meta {{
-    color: var(--s-grey);
-    font-size: 14px;
-    margin-bottom: 14px;
-}}
-
-.kpi-card {{
-    background: #FFFFFF;
-    border-radius: 8px;
-    padding: 18px 20px;
-    box-shadow: 0 2px 9px rgba(35,35,35,.08);
-    border-top: 4px solid var(--s-primary);
-    min-height: 112px;
-}}
-
-.kpi-label {{
-    color: var(--s-grey);
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .02em;
-}}
-
-.kpi-value {{
-    font-size: 34px;
-    line-height: 42px;
-    color: var(--s-text);
-    font-weight: 700;
-    margin-top: 8px;
-}}
-
-.s-progress {{
-    width: 100%;
-    background: #E0E2E3;
-    border-radius: 999px;
-    overflow: hidden;
-    height: 28px;
-    margin: 6px 0 16px 0;
-}}
-
-.s-progress-inner {{
-    height: 100%;
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 13px;
-    color: #FFFFFF;
-    min-width: 38px;
-}}
-
-.tar-card {{
-    background: #FFFFFF;
-    border: 1px solid #E0E2E3;
-    border-radius: 8px;
-    padding: 12px 14px 8px 14px;
-    margin: 10px 0 14px 0;
-    box-shadow: 0 1px 4px rgba(35,35,35,.04);
-}}
-
-.tar-badge {{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 5px;
-    background: var(--s-light-blue);
-    color: var(--s-primary-dark);
-    font-weight: 700;
-    padding: 7px 11px;
-    min-width: 64px;
-    font-size: 13px;
-    margin-bottom: 8px;
-}}
-
-.empty-state {{
-    background: #FFFFFF;
-    border-radius: 8px;
-    padding: 46px 28px;
-    text-align: center;
-    border: 1px dashed #C6E0EC;
-    box-shadow: 0 2px 9px rgba(35,35,35,.06);
-}}
-
-.empty-icon {{
-    height: 85px;
-    width: 85px;
-    border-radius: 50%;
-    background: #C6E0EC;
-    color: var(--s-primary-dark);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 34px;
-    font-weight: 700;
-    margin-bottom: 20px;
-}}
-
-.help-box {{
-    background: var(--s-light-blue);
-    border: 1px solid var(--s-primary-dark);
-    border-radius: 4px;
-    padding: 14px 16px;
-}}
-
-.help-box-title {{
-    color: var(--s-primary-dark);
-    font-weight: 700;
-    margin-bottom: 4px;
-}}
-
-.streamlit-expanderHeader,
-[data-testid="stExpander"] summary {{
-    font-family: 'Montserrat', Arial, sans-serif !important;
-    font-weight: 700 !important;
-    color: var(--s-text) !important;
-    line-height: 24px !important;
-    min-height: 44px !important;
-}}
-
-[data-testid="stRadio"] label {{
-    color: var(--s-text) !important;
-}}
-
-@media (max-width: 768px) {{
-    .block-container {{
-        padding-top: .9rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }}
-    h1 {{ font-size: 32px !important; line-height: 38px !important; }}
-    .login-logo-text {{ font-size: 48px; }}
-    .kpi-card {{ min-height: 92px; padding: 14px 15px; }}
-    .kpi-value {{ font-size: 28px; line-height: 34px; }}
-    .bigrock-card {{ padding: 18px 16px; margin-bottom: 12px; }}
-    .bigrock-title {{ font-size: 22px; line-height: 28px; }}
-    .sidebar-logo-text {{ font-size: 42px; margin-top: 12px; }}
-    .sidebar-status-card {{ margin: 10px 0 14px 0; }}
-    [data-testid="stSidebar"] {{ min-width: 305px !important; max-width: 305px !important; }}
-    [data-testid="stSidebar"] .block-container {{ padding-top: 1rem; }}
+.bigrock-compact,.bigrock-open {{background:#FFFFFF;border-radius:8px;padding:16px 18px;margin:0 0 12px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
+.bigrock-compact {{padding:12px 16px;}}
+.bigrock-title {{font-size:22px;font-weight:700;color:var(--s-text);margin-bottom:4px;}}
+.bigrock-meta {{color:var(--s-grey);font-size:13px;margin-bottom:10px;}}
+.bigrock-kpis {{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}}
+.bigrock-pill {{display:inline-flex;align-items:center;border-radius:999px;background:var(--s-light-blue);color:var(--s-primary-dark);font-weight:700;font-size:12px;padding:5px 9px;}}
+.kpi-card {{background:#FFFFFF;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
+.kpi-label {{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;}}
+.kpi-value {{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
+.s-progress {{width:100%;background:#E0E2E3;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
+.s-progress-inner {{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#FFFFFF;min-width:38px;}}
+.tar-card {{background:#FFFFFF;border:1px solid #E0E2E3;border-radius:8px;padding:12px 14px 8px 14px;margin:10px 0 14px 0;box-shadow:0 1px 4px rgba(35,35,35,.04);}}
+.tar-badge {{display:inline-flex;align-items:center;justify-content:center;border-radius:5px;background:var(--s-light-blue);color:var(--s-primary-dark);font-weight:700;padding:7px 11px;min-width:64px;font-size:13px;margin-bottom:8px;}}
+.empty-state {{background:#FFFFFF;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
+.empty-icon {{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
+.help-box {{background:var(--s-light-blue);border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
+.help-box-title {{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
+.streamlit-expanderHeader,[data-testid="stExpander"] summary {{font-family:'Montserrat',Arial,sans-serif !important;font-weight:700 !important;color:var(--s-text) !important;line-height:24px !important;min-height:44px !important;}}
+[data-testid="stRadio"] label {{color:var(--s-text) !important;}}
+@media (max-width:768px) {{
+    .block-container {{padding-top:.9rem;padding-left:1rem;padding-right:1rem;}}
+    h1 {{font-size:32px !important;line-height:38px !important;}}
+    .login-logo-text {{font-size:48px;}}
+    .kpi-card {{min-height:92px;padding:14px 15px;}}
+    .kpi-value {{font-size:28px;line-height:34px;}}
+    .bigrock-title {{font-size:20px;line-height:26px;}}
+    .sidebar-logo-text {{font-size:42px;margin-top:12px;}}
+    .sidebar-status-card {{margin:10px 0 14px 0;}}
+    [data-testid="stSidebar"] {{min-width:305px !important;max-width:305px !important;}}
+    [data-testid="stSidebar"] .block-container {{padding-top:1rem;}}
+    .sidebar-recover-tip {{display:none;}}
 }}
 </style>
 """,
         unsafe_allow_html=True,
     )
 
+
+def inject_sidebar_recover_tip():
+    st.markdown(
+        f"""
+        <div class="sidebar-recover-tip">
+            <strong>☰ Menú lateral</strong><br>
+            {t('sidebar_help')}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 inject_css()
+inject_sidebar_recover_tip()
 
 # ============================================================
 # SUPABASE
@@ -639,7 +392,6 @@ def get_supabase_client():
 
 
 supabase = get_supabase_client()
-
 if supabase is None:
     st.error(t("supabase_error"))
     st.stop()
@@ -669,8 +421,6 @@ def db_error_message(err):
 
 # ============================================================
 # NOTES BIG ROCK / TAR SENSE CANVIS D'ESQUEMA
-# Es desa tot dins big_rocks.notes_progres en format JSON intern.
-# Si ja hi havia text antic, es conserva com a detall de progres.
 # ============================================================
 
 def unpack_notes(raw):
@@ -686,20 +436,12 @@ def unpack_notes(raw):
 
 
 def pack_notes(br_notes, tar_notes):
-    payload = {
-        "br_notes": br_notes or "",
-        "tar_notes": tar_notes or {},
-    }
+    payload = {"br_notes": br_notes or "", "tar_notes": tar_notes or {}}
     return NOTES_PREFIX + json.dumps(payload, ensure_ascii=False)
 
 
 def get_br_by_id(br_id):
-    data = s_data(
-        s_select("big_rocks", "id, notes_progres")
-        .eq("id", br_id)
-        .limit(1)
-        .execute()
-    )
+    data = s_data(s_select("big_rocks", "id, notes_progres").eq("id", br_id).limit(1).execute())
     return data[0] if data else None
 
 
@@ -708,13 +450,10 @@ def save_tar_note(br_id, tar_id, note):
     current_raw = br.get("notes_progres") if br else ""
     br_notes, tar_notes = unpack_notes(current_raw)
     tar_notes[str(tar_id)] = note or ""
-    supabase.table("big_rocks").update({
-        "notes_progres": pack_notes(br_notes, tar_notes),
-        "updated_at": now_iso(),
-    }).eq("id", br_id).execute()
+    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes, tar_notes), "updated_at": now_iso()}).eq("id", br_id).execute()
 
 # ============================================================
-# DIAGNOSTIC SUPABASE
+# DIAGNOSTIC
 # ============================================================
 
 def show_db_diagnostic(location="main"):
@@ -760,12 +499,7 @@ def verify_password(password, stored_password, stored_salt=None):
 
 
 def get_user(username):
-    data = s_data(
-        s_select("usuaris", "username, password, password_salt, language")
-        .eq("username", username)
-        .limit(1)
-        .execute()
-    )
+    data = s_data(s_select("usuaris", "username, password, password_salt, language").eq("username", username).limit(1).execute())
     return data[0] if data else None
 
 
@@ -773,14 +507,7 @@ def create_user(username, password, language):
     if get_user(username):
         return False
     salt, digest = hash_password(password)
-    payload = {
-        "username": username,
-        "password": digest,
-        "password_salt": salt,
-        "language": language,
-        "created_at": now_iso(),
-        "last_login": None,
-    }
+    payload = {"username": username, "password": digest, "password_salt": salt, "language": language, "created_at": now_iso(), "last_login": None}
     supabase.table("usuaris").insert(payload).execute()
     return True
 
@@ -850,21 +577,23 @@ def progress_bar(progress, label=None):
     progress = int(progress or 0)
     color = progress_color(progress)
     label_text = label if label else f"{progress}%"
-    st.markdown(
-        f"""
+    st.markdown(f"""
         <div class="s-progress">
-            <div class="s-progress-inner" style="width:{max(progress, 4)}%; background:{color}; color:#FFFFFF;">
-                {label_text}
-            </div>
+            <div class="s-progress-inner" style="width:{max(progress, 4)}%; background:{color}; color:#FFFFFF;">{label_text}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
 
 
-def file_to_b64(path):
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
+def status_dot(progress):
+    if progress == 100:
+        return "🟢"
+    if progress >= 75:
+        return "🔵"
+    if progress >= 50:
+        return "🟡"
+    if progress >= 25:
+        return "🟠"
+    return "🔴"
 
 
 def find_existing(candidates):
@@ -874,12 +603,17 @@ def find_existing(candidates):
     return None
 
 
+def file_to_b64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
 def logo_for_sidebar():
     if USE_IMAGE_LOGO:
         negative = find_existing(LOGO_NEGATIVE_CANDIDATES)
         if negative:
             b64 = file_to_b64(negative)
-            return f'<img src="data:image/png;base64,{b64}" style="width:220px; max-width:100%; display:block; margin: 12px auto 18px auto;">'
+            return f'<img src="data:image/png;base64,{b64}" style="width:220px; max-width:100%; display:block; margin:12px auto 18px auto;">'
     return '<div class="sidebar-logo-text">sorigué</div>'
 
 
@@ -888,30 +622,21 @@ def logo_for_login():
         positive = find_existing(LOGO_POSITIVE_CANDIDATES)
         if positive:
             b64 = file_to_b64(positive)
-            return f'<img src="data:image/png;base64,{b64}" style="width:250px; max-width:100%; display:block; margin: 0 auto 22px auto;">'
+            return f'<img src="data:image/png;base64,{b64}" style="width:250px; max-width:100%; display:block; margin:0 auto 22px auto;">'
     return '<div class="login-logo-text">sorigué</div>'
 
 
 def kpi_card(label, value):
-    st.markdown(
-        f"""
+    st.markdown(f"""
         <div class="kpi-card">
             <div class="kpi-label">{label}</div>
             <div class="kpi-value">{value}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
 
 
 def get_brs(username, month):
-    return s_data(
-        s_select("big_rocks", "id, nom, persones, reunions, notes_progres, pregunta, passos")
-        .eq("username", username)
-        .eq("mes", month)
-        .order("id")
-        .execute()
-    )
+    return s_data(s_select("big_rocks", "id, nom, persones, reunions, notes_progres, pregunta, passos").eq("username", username).eq("mes", month).order("id").execute())
 
 
 def get_tars(br_id, active_only=True):
@@ -922,12 +647,7 @@ def get_tars(br_id, active_only=True):
 
 
 def get_months(username):
-    rows = s_data(
-        s_select("big_rocks", "id, mes")
-        .eq("username", username)
-        .order("id", desc=True)
-        .execute()
-    )
+    rows = s_data(s_select("big_rocks", "id, mes").eq("username", username).order("id", desc=True).execute())
     seen = []
     for row in rows:
         mes = row.get("mes")
@@ -937,13 +657,7 @@ def get_months(username):
 
 
 def month_is_closed(username, month):
-    data = s_data(
-        s_select("mesos_tancats", "username, mes")
-        .eq("username", username)
-        .eq("mes", month)
-        .limit(1)
-        .execute()
-    )
+    data = s_data(s_select("mesos_tancats", "username, mes").eq("username", username).eq("mes", month).limit(1).execute())
     return len(data) > 0
 
 
@@ -967,26 +681,31 @@ def dashboard_stats(username, month):
     return len(brs), completed, pending, avg
 
 
+def br_stats(br_id):
+    tars = get_tars(br_id, active_only=True)
+    total = len(tars)
+    completed = sum(1 for tar in tars if int(tar.get("progres") or 0) == 100)
+    in_progress = sum(1 for tar in tars if 0 < int(tar.get("progres") or 0) < 100)
+    pending = sum(1 for tar in tars if int(tar.get("progres") or 0) == 0)
+    avg = int(sum(int(tar.get("progres") or 0) for tar in tars) / total) if total else 0
+    return {"total": total, "completed": completed, "in_progress": in_progress, "pending": pending, "avg": avg, "tars": tars}
+
+
 def update_db_val(table, field, val, uid):
-    allowed = {
-        "tars": {"descripcio", "progres", "estat"},
-        "big_rocks": {"notes_progres", "pregunta", "passos", "nom", "persones", "reunions"},
-    }
+    allowed = {"tars": {"descripcio", "progres", "estat"}, "big_rocks": {"notes_progres", "pregunta", "passos", "nom", "persones", "reunions"}}
     if table not in allowed or field not in allowed[table]:
         return
-    payload = {field: val, "updated_at": now_iso()}
-    supabase.table(table).update(payload).eq("id", uid).execute()
+    supabase.table(table).update({field: val, "updated_at": now_iso()}).eq("id", uid).execute()
 
 
 def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes, pregunta, passos):
-    notes_payload = pack_notes(br_notes, {})
     payload = {
         "username": username,
         "mes": month,
         "nom": nom,
         "persones": persones,
         "reunions": reunions,
-        "notes_progres": notes_payload,
+        "notes_progres": pack_notes(br_notes, {}),
         "pregunta": pregunta,
         "passos": passos,
         "created_at": now_iso(),
@@ -1000,15 +719,7 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
     rows = []
     for i, desc in enumerate(tar_descs, start=1):
         if desc.strip():
-            rows.append({
-                "id_br": br_id,
-                "num": f"TAR {i}",
-                "descripcio": desc.strip(),
-                "progres": 0,
-                "estat": "Actiu",
-                "created_at": now_iso(),
-                "updated_at": now_iso(),
-            })
+            rows.append({"id_br": br_id, "num": f"TAR {i}", "descripcio": desc.strip(), "progres": 0, "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()})
     if rows:
         supabase.table("tars").insert(rows).execute()
     return br_id
@@ -1016,12 +727,7 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
 
 def save_bigrock_notes(br_id, raw_current_notes, br_notes, pregunta, passos):
     _, tar_notes = unpack_notes(raw_current_notes)
-    supabase.table("big_rocks").update({
-        "notes_progres": pack_notes(br_notes, tar_notes),
-        "pregunta": pregunta,
-        "passos": passos,
-        "updated_at": now_iso(),
-    }).eq("id", br_id).execute()
+    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes, tar_notes), "pregunta": pregunta, "passos": passos, "updated_at": now_iso()}).eq("id", br_id).execute()
 
 
 def export_month_dataframe(username, month):
@@ -1070,6 +776,8 @@ if "mostrar_formulari_br" not in st.session_state:
     st.session_state.mostrar_formulari_br = False
 if "mes_actual" not in st.session_state:
     st.session_state.mes_actual = get_month_key(st.session_state.idioma)
+if "open_br_id" not in st.session_state:
+    st.session_state.open_br_id = None
 
 # ============================================================
 # LOGIN I REGISTRE
@@ -1078,16 +786,13 @@ if "mes_actual" not in st.session_state:
 if st.session_state.usuari_actual is None:
     left, center, right = st.columns([1, 1.35, 1])
     with center:
-        st.markdown(
-            f"""
+        st.markdown(f"""
             <div style="background:{PRIMARY}; border-radius:10px; padding:36px 38px 34px 38px; margin-top:32px; box-shadow:0 3px 14px rgba(35,35,35,.12);">
                 {logo_for_login()}
                 <div style="color:#FFFFFF; font-size:28px; line-height:34px; font-weight:700; text-align:center;">{t('login_title')}</div>
                 <div style="color:#E7F2F7; font-size:14px; line-height:21px; text-align:center; margin-top:8px;">{t('login_subtitle')}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """, unsafe_allow_html=True)
         st.write("")
         show_db_diagnostic("login")
         tab1, tab2 = st.tabs([t("login_tab"), t("reg_tab")])
@@ -1109,6 +814,7 @@ if st.session_state.usuari_actual is None:
                                 st.session_state.idioma = user.get("language") or "ca"
                                 st.session_state.mes_actual = get_month_key(st.session_state.idioma)
                                 st.session_state.pantalla = "dashboard"
+                                st.session_state.open_br_id = None
                                 update_user_login(username_clean)
                                 if not user.get("password_salt"):
                                     migrate_plain_password(username_clean, contrasenya)
@@ -1122,11 +828,7 @@ if st.session_state.usuari_actual is None:
             with st.form("register_form"):
                 nou_usuari = st.text_input(t("new_usr"), placeholder="nom.cognom")
                 nova_contra = st.text_input(t("pwd"), type="password", placeholder="Mínim recomanat: 8 caràcters")
-                nou_idioma = st.selectbox(
-                    t("lang_reg"),
-                    options=["ca", "es"],
-                    format_func=lambda x: "Català" if x == "ca" else "Español",
-                )
+                nou_idioma = st.selectbox(t("lang_reg"), options=["ca", "es"], format_func=lambda x: "Català" if x == "ca" else "Español")
                 submitted = st.form_submit_button(t("register"), type="primary", use_container_width=True)
                 if submitted:
                     username_clean = nou_usuari.strip()
@@ -1153,27 +855,16 @@ with st.sidebar:
     st.markdown(logo_for_sidebar(), unsafe_allow_html=True)
     st.markdown("<div class='sidebar-app-title'>BIG ROCKS</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='sidebar-app-subtitle'>{t('brand_subtitle')}</div>", unsafe_allow_html=True)
-
-    st.markdown(
-        f"""
+    st.markdown(f"""
         <div class="sidebar-status-card">
             <div class="sidebar-pill">Persona</div>
             <div class="sidebar-white" style="font-size:14px; margin-top:10px; font-weight:500;">{t('conn_as')}</div>
             <div class="sidebar-white" style="font-size:16px; margin-top:2px; font-weight:700;">{USUARI}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
 
     lang_idx = 0 if st.session_state.idioma == "ca" else 1
-    idioma_triat = st.selectbox(
-        t("lang"),
-        ["ca", "es"],
-        index=lang_idx,
-        format_func=lambda x: "Català" if x == "ca" else "Castellano",
-        key="idioma_selector",
-        on_change=change_language,
-    )
+    idioma_triat = st.selectbox(t("lang"), ["ca", "es"], index=lang_idx, format_func=lambda x: "Català" if x == "ca" else "Castellano", key="idioma_selector", on_change=change_language)
     st.session_state.idioma = idioma_triat
 
     mesos_disponibles = get_months(USUARI)
@@ -1183,46 +874,37 @@ with st.sidebar:
     if st.session_state.mes_actual not in mesos_disponibles:
         st.session_state.mes_actual = mes_ini
 
-    mes_seleccionat = st.selectbox(
-        t("nav_months"),
-        mesos_disponibles,
-        index=mesos_disponibles.index(st.session_state.mes_actual),
-        key="mes_selector",
-    )
+    mes_seleccionat = st.selectbox(t("nav_months"), mesos_disponibles, index=mesos_disponibles.index(st.session_state.mes_actual), key="mes_selector")
+    if mes_seleccionat != st.session_state.mes_actual:
+        st.session_state.open_br_id = None
     st.session_state.mes_actual = mes_seleccionat
     MES = st.session_state.mes_actual
     es_tancat = month_is_closed(USUARI, MES)
 
     if es_tancat:
-        st.markdown(
-            f"""
+        st.markdown(f"""
             <div class='sidebar-status-card'>
                 <div class='sidebar-white' style='font-weight:700;'>{t('status_closed')}</div>
                 <div class='sidebar-white' style='margin-top:5px;'>{t('closed_month')}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """, unsafe_allow_html=True)
         if st.button(t("unlock"), use_container_width=True):
             unlock_month(USUARI, MES)
             st.rerun()
     else:
-        st.markdown(
-            f"""
+        st.markdown(f"""
             <div class='sidebar-status-card'>
                 <div class='sidebar-white' style='font-weight:700;'>{t('status_open')}</div>
                 <div class='sidebar-white' style='margin-top:5px;'>{t('open_month')}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """, unsafe_allow_html=True)
 
     if DEBUG_DB:
         show_db_diagnostic("sidebar")
 
     st.markdown("<div style='height:34px;'></div>", unsafe_allow_html=True)
     if st.button(t("logout"), use_container_width=True):
-        for key in ["usuari_actual", "pantalla", "mostrar_formulari_br"]:
+        for key in ["usuari_actual", "pantalla", "mostrar_formulari_br", "open_br_id"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
@@ -1233,14 +915,9 @@ with st.sidebar:
 
 def render_report(title, allow_close=False):
     st.title(f"{title} · {MES}")
-
     brs = get_brs(USUARI, MES)
-    tars_completats = []
-    tars_pendents = []
-    tars_en_curs = []
-    sumatori_progres = 0
-    total_tars = 0
-
+    tars_completats, tars_pendents, tars_en_curs = [], [], []
+    sumatori_progres, total_tars = 0, 0
     for br in brs:
         for tar in get_tars(br["id"], active_only=True):
             desc = tar.get("descripcio") or ""
@@ -1253,11 +930,9 @@ def render_report(title, allow_close=False):
                 tars_pendents.append((br.get("nom") or "", desc, progres))
             else:
                 tars_en_curs.append((br.get("nom") or "", desc, progres))
-
     compliment_global = int(sumatori_progres / total_tars) if total_tars else 0
     st.markdown(f"### {t('global_comp')}")
     progress_bar(compliment_global, f"{compliment_global}%")
-
     c1, c2, c3 = st.columns(3)
     with c1:
         st.success(t("successes"))
@@ -1289,16 +964,8 @@ def render_report(title, allow_close=False):
             if pendents:
                 existing_notes, _ = unpack_notes(br.get("notes_progres"))
                 payload = {
-                    "username": USUARI,
-                    "mes": nou_mes,
-                    "nom": br.get("nom") or "",
-                    "persones": br.get("persones") or "",
-                    "reunions": br.get("reunions") or "",
-                    "notes_progres": pack_notes(existing_notes, {}),
-                    "pregunta": br.get("pregunta") or "",
-                    "passos": br.get("passos") or "",
-                    "created_at": now_iso(),
-                    "updated_at": now_iso(),
+                    "username": USUARI, "mes": nou_mes, "nom": br.get("nom") or "", "persones": br.get("persones") or "", "reunions": br.get("reunions") or "",
+                    "notes_progres": pack_notes(existing_notes, {}), "pregunta": br.get("pregunta") or "", "passos": br.get("passos") or "", "created_at": now_iso(), "updated_at": now_iso(),
                 }
                 res = supabase.table("big_rocks").insert(payload).execute()
                 data = s_data(res)
@@ -1306,19 +973,12 @@ def render_report(title, allow_close=False):
                     new_br_id = data[0]["id"]
                     rows = []
                     for tar in pendents:
-                        rows.append({
-                            "id_br": new_br_id,
-                            "num": tar.get("num") or "TAR",
-                            "descripcio": tar.get("descripcio") or "",
-                            "progres": int(tar.get("progres") or 0),
-                            "estat": "Actiu",
-                            "created_at": now_iso(),
-                            "updated_at": now_iso(),
-                        })
+                        rows.append({"id_br": new_br_id, "num": tar.get("num") or "TAR", "descripcio": tar.get("descripcio") or "", "progres": int(tar.get("progres") or 0), "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()})
                     if rows:
                         supabase.table("tars").insert(rows).execute()
         st.session_state.mes_actual = nou_mes
         st.session_state.pantalla = "dashboard"
+        st.session_state.open_br_id = None
         st.rerun()
 
     st.write("")
@@ -1349,29 +1009,22 @@ if st.session_state.pantalla == "dashboard":
     with col_title:
         st.title(f"Big Rocks · {MES}")
     with col_help:
-        st.markdown(
-            f"""
+        st.markdown(f"""
             <div class="help-box">
                 <div class="help-box-title">{t('help_title')}</div>
                 <div style="font-size:13px; color:#232323;">{t('help_body')}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """, unsafe_allow_html=True)
 
     br_count, completed, pending, avg = dashboard_stats(USUARI, MES)
     k1, k2, k3, k4 = st.columns(4)
-    with k1:
-        kpi_card(t("active_brs"), br_count)
-    with k2:
-        kpi_card(t("avg_progress"), f"{avg}%")
-    with k3:
-        kpi_card(t("completed_tars"), completed)
-    with k4:
-        kpi_card(t("pending_tars"), pending)
+    with k1: kpi_card(t("active_brs"), br_count)
+    with k2: kpi_card(t("avg_progress"), f"{avg}%")
+    with k3: kpi_card(t("completed_tars"), completed)
+    with k4: kpi_card(t("pending_tars"), pending)
 
     st.write("")
-    action_col1, action_col2, action_col3, _ = st.columns([1.35, 1.35, 1.2, 2.5])
+    action_col1, action_col2, action_col3, action_col4, _ = st.columns([1.35, 1.35, 1.2, 1.1, 1.4])
     with action_col1:
         if not es_tancat:
             if st.button(t("eval_close"), type="primary", use_container_width=True):
@@ -1384,28 +1037,23 @@ if st.session_state.pantalla == "dashboard":
     with action_col3:
         df_export = export_month_dataframe(USUARI, MES)
         if not df_export.empty:
-            st.download_button(
-                t("export_csv"),
-                df_export.to_csv(index=False).encode("utf-8-sig"),
-                file_name=f"bigrocks_{USUARI}_{MES}.csv".replace(" ", "_"),
-                mime="text/csv",
-                use_container_width=True,
-            )
+            st.download_button(t("export_csv"), df_export.to_csv(index=False).encode("utf-8-sig"), file_name=f"bigrocks_{USUARI}_{MES}.csv".replace(" ", "_"), mime="text/csv", use_container_width=True)
+    with action_col4:
+        if st.button(t("collapse_all"), use_container_width=True):
+            st.session_state.open_br_id = None
+            st.rerun()
 
     st.write("")
     brs = get_brs(USUARI, MES)
 
     if not brs:
-        st.markdown(
-            f"""
+        st.markdown(f"""
             <div class="empty-state">
                 <div class="empty-icon">BR</div>
                 <h2>{t('no_br_title')}</h2>
                 <p style="color:#53565A; font-size:16px;">{t('no_br_body')}</p>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            """, unsafe_allow_html=True)
         if not es_tancat:
             _, cta_col, _ = st.columns([1, 1, 1])
             with cta_col:
@@ -1414,69 +1062,44 @@ if st.session_state.pantalla == "dashboard":
     else:
         for br in brs:
             br_id = br["id"]
+            stats = br_stats(br_id)
+            progres_mitja = stats["avg"]
+            is_open = st.session_state.open_br_id == br_id
             br_notes, tar_notes = unpack_notes(br.get("notes_progres"))
-            tars = get_tars(br_id, active_only=True)
-            progres_mitja = int(sum(int(tar.get("progres") or 0) for tar in tars) / len(tars)) if tars else 0
+            icon = "▼" if is_open else "▶"
 
-            st.markdown(
-                f"""
-                <div class="bigrock-card">
-                    <div class="bigrock-title">{br.get('nom') or ''}</div>
+            st.markdown(f"""
+                <div class="{'bigrock-open' if is_open else 'bigrock-compact'}">
+                    <div class="bigrock-title">{icon} {br.get('nom') or ''}</div>
                     <div class="bigrock-meta"><strong>{t('key_ppl')}:</strong> {br.get('persones') or '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {br.get('reunions') or '-'}</div>
-                    <div style="font-weight:700; color:#53565A; font-size:13px; text-transform:uppercase;">{t('global_prog')}</div>
+                    <div class="bigrock-kpis">
+                        <span class="bigrock-pill">{status_dot(progres_mitja)} {progres_mitja}%</span>
+                        <span class="bigrock-pill">{stats['total']} TARs</span>
+                        <span class="bigrock-pill">{stats['completed']} completades</span>
+                        <span class="bigrock-pill">{stats['in_progress']} en curs</span>
+                        <span class="bigrock-pill">{stats['pending']} pendents</span>
+                    </div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                """, unsafe_allow_html=True)
+
+            left_btn, right_space = st.columns([1, 4])
+            with left_btn:
+                if is_open:
+                    if st.button(t("close_bigrock"), key=f"toggle_br_{br_id}", use_container_width=True):
+                        st.session_state.open_br_id = None
+                        st.rerun()
+                else:
+                    if st.button(t("open_bigrock"), key=f"toggle_br_{br_id}", use_container_width=True):
+                        st.session_state.open_br_id = br_id
+                        st.rerun()
+
+            if not is_open:
+                continue
+
             progress_bar(progres_mitja, f"{progres_mitja}%")
 
-            for tar in tars:
-                tar_id = tar["id"]
-                progres = int(tar.get("progres") or 0)
-                progres = progres if progres in [0, 25, 50, 75, 100] else 0
-                st.markdown("<div class='tar-card'>", unsafe_allow_html=True)
-                st.markdown(f"<div class='tar-badge'>{tar.get('num') or ''}</div>", unsafe_allow_html=True)
-                k_desc = f"desc_{tar_id}"
-                st.text_input(
-                    t("desc"),
-                    value=tar.get("descripcio") or "",
-                    key=k_desc,
-                    label_visibility="collapsed",
-                    disabled=es_tancat,
-                    placeholder=t("desc"),
-                    on_change=lambda tid=tar_id, k=k_desc: update_db_val("tars", "descripcio", st.session_state[k], tid),
-                )
-                k_radio = f"radio_{tar_id}"
-                st.radio(
-                    t("state"),
-                    options=[0, 25, 50, 75, 100],
-                    format_func=lambda x: f"{x}%",
-                    index=[0, 25, 50, 75, 100].index(progres),
-                    horizontal=True,
-                    key=k_radio,
-                    label_visibility="collapsed",
-                    disabled=es_tancat,
-                    on_change=lambda tid=tar_id, k=k_radio: update_db_val("tars", "progres", st.session_state[k], tid),
-                )
-                progress_bar(progres)
-
-                with st.expander(t("tar_notes"), expanded=False):
-                    note_key = f"tar_note_{tar_id}"
-                    st.text_area(
-                        t("tar_notes"),
-                        value=tar_notes.get(str(tar_id), ""),
-                        key=note_key,
-                        disabled=es_tancat,
-                        placeholder=t("tar_notes_placeholder"),
-                        label_visibility="collapsed",
-                    )
-                    if not es_tancat:
-                        if st.button(t("save_tar_notes"), key=f"save_tar_note_{tar_id}"):
-                            save_tar_note(br_id, tar_id, st.session_state[note_key])
-                            st.success(t("saved"))
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with st.expander(t("details"), expanded=False):
+            # Primer els detalls, després els TARs
+            with st.expander(t("details"), expanded=True):
                 notes_key = f"notes_{br_id}"
                 preg_key = f"preg_{br_id}"
                 passos_key = f"passos_{br_id}"
@@ -1488,11 +1111,31 @@ if st.session_state.pantalla == "dashboard":
                         save_bigrock_notes(br_id, br.get("notes_progres"), notes, preg, passos_val)
                         st.success(t("saved"))
 
+            st.markdown("### TARs")
+            for tar in stats["tars"]:
+                tar_id = tar["id"]
+                progres = int(tar.get("progres") or 0)
+                progres = progres if progres in [0, 25, 50, 75, 100] else 0
+                st.markdown("<div class='tar-card'>", unsafe_allow_html=True)
+                st.markdown(f"<div class='tar-badge'>{tar.get('num') or ''}</div>", unsafe_allow_html=True)
+                k_desc = f"desc_{tar_id}"
+                st.text_input(t("desc"), value=tar.get("descripcio") or "", key=k_desc, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"), on_change=lambda tid=tar_id, k=k_desc: update_db_val("tars", "descripcio", st.session_state[k], tid))
+                k_radio = f"radio_{tar_id}"
+                st.radio(t("state"), options=[0, 25, 50, 75, 100], format_func=lambda x: f"{x}%", index=[0, 25, 50, 75, 100].index(progres), horizontal=True, key=k_radio, label_visibility="collapsed", disabled=es_tancat, on_change=lambda tid=tar_id, k=k_radio: update_db_val("tars", "progres", st.session_state[k], tid))
+                progress_bar(progres)
+                with st.expander(t("tar_notes"), expanded=False):
+                    note_key = f"tar_note_{tar_id}"
+                    st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
+                    if not es_tancat:
+                        if st.button(t("save_tar_notes"), key=f"save_tar_note_{tar_id}"):
+                            save_tar_note(br_id, tar_id, st.session_state[note_key])
+                            st.success(t("saved"))
+                st.markdown("</div>", unsafe_allow_html=True)
+
     if not es_tancat:
         st.write("")
         if st.button(t("create_br"), type="primary"):
             st.session_state.mostrar_formulari_br = not st.session_state.mostrar_formulari_br
-
         if st.session_state.mostrar_formulari_br:
             st.subheader(t("config_br"))
             with st.form("form_nova_br"):
@@ -1500,33 +1143,24 @@ if st.session_state.pantalla == "dashboard":
                 c1, c2 = st.columns(2)
                 persones = c1.text_input(t("key_ppl"), placeholder=t("people_placeholder"))
                 reunions = c2.text_input(t("key_meet"), placeholder=t("meetings_placeholder"))
+                st.markdown(f"### {t('details')}")
+                br_notes_new = st.text_area(t("prog"), placeholder=t("prog"))
+                pregunta_new = st.text_input(t("need"), placeholder=t("need"))
+                passos_new = st.text_input(t("next_steps"), placeholder=t("next_steps"))
                 st.markdown("### TARs")
                 t1 = st.text_input("TAR 1", placeholder=t("tar_placeholder"))
                 t2 = st.text_input("TAR 2", placeholder=t("tar_placeholder"))
                 t3 = st.text_input("TAR 3", placeholder=t("tar_placeholder"))
                 t4 = st.text_input("TAR 4", placeholder=t("tar_placeholder"))
-                st.markdown(f"### {t('details')}")
-                br_notes_new = st.text_area(t("prog"), placeholder=t("prog"))
-                pregunta_new = st.text_input(t("need"), placeholder=t("need"))
-                passos_new = st.text_input(t("next_steps"), placeholder=t("next_steps"))
                 submitted = st.form_submit_button(t("save"), type="primary", use_container_width=True)
                 if submitted:
                     if not nou_nom.strip():
                         st.error(t("title_br"))
                     else:
                         try:
-                            create_bigrock(
-                                USUARI,
-                                MES,
-                                nou_nom.strip(),
-                                persones.strip(),
-                                reunions.strip(),
-                                [t1, t2, t3, t4],
-                                br_notes_new,
-                                pregunta_new,
-                                passos_new,
-                            )
+                            new_id = create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4], br_notes_new, pregunta_new, passos_new)
                             st.session_state.mostrar_formulari_br = False
+                            st.session_state.open_br_id = new_id
                             st.rerun()
                         except Exception as e:
                             st.error(db_error_message(e))
