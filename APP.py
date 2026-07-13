@@ -12,8 +12,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V20
-# Supabase + TARs compactes + desplegament BR corregit
+# BIG ROCKS - SORIGUE | APP.py V21
+# Supabase + TARs compactes corregides + CSS validat
 # ============================================================
 
 DEBUG_DB = False
@@ -252,9 +252,9 @@ h3 {{font-size:20px !important;line-height:28px !important;font-weight:600 !impo
 .tar-form-card {{background:#FFFFFF;border-radius:8px;padding:16px 18px;margin:14px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
 .tar-title-line {{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}}
 .tar-title-text {{font-size:15px;font-weight:700;color:var(--s-primary-dark);}}
-.tar-header-card {background:#FFFFFF;border-radius:8px;padding:10px 12px;margin:2px 0 10px 0;border-left:6px solid var(--s-primary);box-shadow:0 1px 4px rgba(35,35,35,.06);}
-.tar-header-title {font-size:15px;font-weight:700;color:var(--s-primary-dark);line-height:21px;}
-.tar-header-progress {font-size:13px;font-weight:700;color:var(--s-text);}
+.tar-header-card {{background:#FFFFFF;border-radius:8px;padding:10px 12px;margin:2px 0 10px 0;border-left:6px solid var(--s-primary);box-shadow:0 1px 4px rgba(35,35,35,.06);}}
+.tar-header-title {{font-size:15px;font-weight:700;color:var(--s-primary-dark);line-height:21px;}}
+.tar-header-progress {{font-size:13px;font-weight:700;color:var(--s-text);}}
 
 .tar-progress-mini {{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px 0;}}
 .tar-progress-pill {{display:inline-flex;align-items:center;border-radius:999px;background:#F3F6F8;color:var(--s-grey);font-weight:700;font-size:12px;padding:5px 9px;border:1px solid #E0E2E3;}}
