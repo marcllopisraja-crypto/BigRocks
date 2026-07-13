@@ -10,8 +10,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V15
-# Supabase + rendiment millorat + Big Rocks clicables + sidebar neta
+# BIG ROCKS - SORIGUE | APP.py V16
+# Supabase + formulari per Big Rock + sidebar restaurada
 # ============================================================
 
 DEBUG_DB = False
@@ -95,6 +95,8 @@ TRANS = {
         "save_notes": "Guardar notes",
         "save_tar_notes": "Guardar anotacions TAR",
         "save_tar": "Guardar TAR",
+        "save_full_br": "Guardar Big Rock",
+        "save_full_br": "Guardar Big Rock",
         "create_br": "Crear nova Big Rock",
         "config_br": "Configura la teva nova Big Rock",
         "title_br": "Títol de la Big Rock",
@@ -169,6 +171,7 @@ TRANS = {
         "save_notes": "Guardar notas",
         "save_tar_notes": "Guardar anotaciones TAR",
         "save_tar": "Guardar TAR",
+        "save_full_br": "Guardar Big Rock",
         "create_br": "Crear nueva Big Rock",
         "config_br": "Configura tu nueva Big Rock",
         "title_br": "Título de la Big Rock",
@@ -247,27 +250,7 @@ p,label,h1,h2,h3,h4,h5,h6,[data-testid="stMarkdownContainer"],[data-testid="stTe
 h1 {{font-size:42px !important;line-height:50px !important;font-weight:700 !important;color:var(--s-text) !important;}}
 h2 {{font-size:28px !important;line-height:34px !important;font-weight:700 !important;color:var(--s-text) !important;}}
 h3 {{font-size:20px !important;line-height:28px !important;font-weight:600 !important;color:var(--s-text) !important;}}
-#MainMenu {{visibility:hidden;}}
-footer {{visibility:hidden;}}
-[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"] {{display:none !important;}}
-
-/* Botó nadiu de sidebar: només el fem més visible, sense caixa explicativa */
-[data-testid="collapsedControl"] {{
-    display:flex !important;
-    align-items:center !important;
-    justify-content:center !important;
-    position:fixed !important;
-    top:14px !important;
-    left:14px !important;
-    z-index:999999 !important;
-    width:48px !important;
-    height:48px !important;
-    background:var(--s-primary) !important;
-    border:2px solid #FFFFFF !important;
-    border-radius:999px !important;
-    box-shadow:0 6px 18px rgba(0,0,0,.25) !important;
-}}
-[data-testid="collapsedControl"] svg {{color:#FFFFFF !important;fill:#FFFFFF !important;width:24px !important;height:24px !important;}}
+/* V16: sidebar restaurada. No amaguem MainMenu, footer, toolbar, status widget ni collapsedControl. */
 
 .login-logo-text {{color:#FFFFFF;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
 [data-testid="stSidebar"] {{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%) !important;}}
@@ -694,6 +677,28 @@ def save_tar_note(br_id, raw_current_notes, tar_id, note):
     supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes, tar_notes), "updated_at": now_iso()}).eq("id", br_id).execute()
 
 
+def save_bigrock_form(br_id, raw_current_notes, br_notes, pregunta, passos, tar_updates, tar_note_updates):
+    _, existing_tar_notes = unpack_notes(raw_current_notes)
+    for tar_id, note in tar_note_updates.items():
+        existing_tar_notes[str(tar_id)] = note or ""
+
+    # Actualitza la Big Rock una sola vegada
+    supabase.table("big_rocks").update({
+        "notes_progres": pack_notes(br_notes, existing_tar_notes),
+        "pregunta": pregunta,
+        "passos": passos,
+        "updated_at": now_iso(),
+    }).eq("id", br_id).execute()
+
+    # Actualitza totes les TARs dins del mateix guardat lògic
+    for tar_id, payload in tar_updates.items():
+        supabase.table("tars").update({
+            "descripcio": payload.get("descripcio", ""),
+            "progres": int(payload.get("progres", 0)),
+            "updated_at": now_iso(),
+        }).eq("id", tar_id).execute()
+
+
 def export_month_dataframe(username, month, brs, tars_by_br):
     rows = []
     for br in brs:
@@ -1066,41 +1071,83 @@ if st.session_state.pantalla == "dashboard":
                 """, unsafe_allow_html=True)
             progress_bar(progres_mitja, f"{progres_mitja}%")
 
-            # Primer detalls
-            with st.expander(t("details"), expanded=True):
+            # V16: un únic formulari per Big Rock. No hi ha Guardar TAR individual.
+            with st.form(f"form_bigrock_{br_id}"):
+                st.markdown(f"### {t('details')}")
                 notes_key = f"notes_{br_id}"
                 preg_key = f"preg_{br_id}"
                 passos_key = f"passos_{br_id}"
                 notes = st.text_area(t("prog"), value=br_notes, key=notes_key, disabled=es_tancat)
                 preg = st.text_input(t("need"), value=br.get("pregunta") or "", key=preg_key, disabled=es_tancat)
                 passos_val = st.text_input(t("next_steps"), value=br.get("passos") or "", key=passos_key, disabled=es_tancat)
-                if not es_tancat:
-                    if st.button(t("save_notes"), key=f"save_{br_id}"):
-                        save_bigrock_notes(br_id, br.get("notes_progres"), notes, preg, passos_val)
-                        st.success(t("saved"))
-                        st.rerun()
 
-            st.markdown("### TARs")
-            for tar in tar_list:
-                tar_id = tar["id"]
-                progres = int(tar.get("progres") or 0)
-                progres = progres if progres in [0, 25, 50, 75, 100] else 0
-                with st.container(border=True):
+                st.markdown("### TARs")
+                tar_updates = {}
+                tar_note_updates = {}
+                for tar in tar_list:
+                    tar_id = tar["id"]
+                    progres = int(tar.get("progres") or 0)
+                    progres = progres if progres in [0, 25, 50, 75, 100] else 0
+
                     st.markdown(f"<div class='tar-badge'>{tar.get('num') or ''}</div>", unsafe_allow_html=True)
                     desc_key = f"desc_{tar_id}"
                     prog_key = f"prog_{tar_id}"
                     note_key = f"tar_note_{tar_id}"
-                    st.text_input(t("desc"), value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
-                    st.radio(t("state"), options=[0, 25, 50, 75, 100], format_func=lambda x: f"{x}%", index=[0, 25, 50, 75, 100].index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
+
+                    st.text_input(
+                        t("desc"),
+                        value=tar.get("descripcio") or "",
+                        key=desc_key,
+                        label_visibility="collapsed",
+                        disabled=es_tancat,
+                        placeholder=t("desc"),
+                    )
+                    st.radio(
+                        t("state"),
+                        options=[0, 25, 50, 75, 100],
+                        format_func=lambda x: f"{x}%",
+                        index=[0, 25, 50, 75, 100].index(progres),
+                        horizontal=True,
+                        key=prog_key,
+                        label_visibility="collapsed",
+                        disabled=es_tancat,
+                    )
                     progress_bar(st.session_state.get(prog_key, progres))
+
                     with st.expander(t("tar_notes"), expanded=False):
-                        st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
-                    if not es_tancat:
-                        if st.button(t("save_tar"), key=f"save_tar_{tar_id}"):
-                            update_tar(tar_id, st.session_state.get(desc_key, ""), st.session_state.get(prog_key, progres))
-                            save_tar_note(br_id, br.get("notes_progres"), tar_id, st.session_state.get(note_key, ""))
-                            st.success(t("saved"))
-                            st.rerun()
+                        st.text_area(
+                            t("tar_notes"),
+                            value=tar_notes.get(str(tar_id), ""),
+                            key=note_key,
+                            disabled=es_tancat,
+                            placeholder=t("tar_notes_placeholder"),
+                            label_visibility="collapsed",
+                        )
+
+                    tar_updates[tar_id] = {
+                        "descripcio": st.session_state.get(desc_key, tar.get("descripcio") or ""),
+                        "progres": st.session_state.get(prog_key, progres),
+                    }
+                    tar_note_updates[tar_id] = st.session_state.get(note_key, tar_notes.get(str(tar_id), ""))
+                    st.divider()
+
+                submit_bigrock = st.form_submit_button(t("save_full_br"), type="primary", use_container_width=True, disabled=es_tancat)
+                if submit_bigrock:
+                    try:
+                        save_bigrock_form(
+                            br_id,
+                            br.get("notes_progres"),
+                            st.session_state.get(notes_key, ""),
+                            st.session_state.get(preg_key, ""),
+                            st.session_state.get(passos_key, ""),
+                            tar_updates,
+                            tar_note_updates,
+                        )
+                        st.session_state.open_br_id = br_id
+                        st.success(t("saved"))
+                        st.rerun()
+                    except Exception as e:
+                        st.error(db_error_message(e))
 
     if not es_tancat:
         st.write("")
