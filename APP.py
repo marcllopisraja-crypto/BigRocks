@@ -11,8 +11,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V36
-# Fons blau corporatiu subtil + barra global/TAR clicable amb slider + auto-save
+# BIG ROCKS - SORIGUE | APP.py V37
+# Fons corporatiu + select_slider alineat + autosave + informe agrupat per Big Rock
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -44,6 +44,7 @@ TRANS = {
         "login_tab": "Iniciar sessió",
         "reg_tab": "Registrar usuari",
         "email_user": "Correu corporatiu",
+        "remember_user": "Recordar usuari en aquest dispositiu",
         "pwd": "Contrasenya",
         "new_usr": "Correu corporatiu",
         "lang_reg": "Idioma per defecte",
@@ -98,9 +99,9 @@ TRANS = {
         "summary": "Resum de tancament",
         "report_title": "Informe de seguiment",
         "global_comp": "Grau de compliment global",
-        "successes": "Èxits completats",
+        "successes": "Completades",
         "in_progress": "En curs",
-        "carry_over": "Es traspassen",
+        "carry_over": "Pendents / es traspassen",
         "cancel": "Cancel·lar i tornar",
         "confirm_close": "Confirmar tancament i crear mes següent",
         "back": "Tornar",
@@ -120,6 +121,7 @@ TRANS = {
         "login_tab": "Iniciar sesión",
         "reg_tab": "Registrar usuario",
         "email_user": "Correo corporativo",
+        "remember_user": "Recordar usuario en este dispositivo",
         "pwd": "Contraseña",
         "new_usr": "Correo corporativo",
         "lang_reg": "Idioma por defecto",
@@ -174,9 +176,9 @@ TRANS = {
         "summary": "Resumen de cierre",
         "report_title": "Informe de seguimiento",
         "global_comp": "Grado de cumplimiento global",
-        "successes": "Éxitos completados",
+        "successes": "Completadas",
         "in_progress": "En curso",
-        "carry_over": "Se traspasan",
+        "carry_over": "Pendientes / se traspasan",
         "cancel": "Cancelar y volver",
         "confirm_close": "Confirmar cierre y crear mes siguiente",
         "back": "Volver",
@@ -208,7 +210,7 @@ def inject_css():
     st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
-:root {{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-success:{SUCCESS};--s-warning:{WARNING};--s-error:{ERROR};--s-light-blue:{LIGHT_BLUE};}}
+:root {{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-light-blue:{LIGHT_BLUE};}}
 html, body, input, textarea, button, select {{font-family:'Montserrat',Arial,sans-serif!important;}}
 .stApp {{
     background-color:#F6FAFC;
@@ -240,21 +242,18 @@ h2 {{font-size:28px!important;line-height:34px!important;font-weight:700!importa
 .open-card-button button:hover {{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#FFFFFF!important;}}
 .info-card {{background:#FFFFFF;border-radius:8px;padding:14px 16px;margin:12px 0 16px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
 .info-card-meta {{color:var(--s-grey);font-size:13px;}}
-.tar-title-v36 {{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
-.tar-left-blue-v36 {{width:6px;background:var(--s-primary);border-radius:999px;min-height:178px;height:100%;margin-top:0;}}
-.tar-edit-btn-v36 button {{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:var(--s-primary)!important;color:#FFFFFF!important;border:1px solid var(--s-primary)!important;}}
-.tar-edit-btn-v36 button:hover {{background:var(--s-primary-hover)!important;color:#FFFFFF!important;border-color:var(--s-primary-hover)!important;}}
+.tar-title-v37 {{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+.tar-left-blue-v37 {{width:6px;background:var(--s-primary);border-radius:999px;min-height:156px;height:100%;margin-top:0;}}
+.tar-edit-btn-v37 button {{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:var(--s-primary)!important;color:#FFFFFF!important;border:1px solid var(--s-primary)!important;}}
+.tar-edit-btn-v37 button:hover {{background:var(--s-primary-hover)!important;color:#FFFFFF!important;border-color:var(--s-primary-hover)!important;}}
 .s-progress {{width:100%;background:#D9E3E8;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
 .s-progress-inner {{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#FFFFFF;min-width:38px;background:var(--s-primary)!important;}}
-.tar-slider-card {{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:12px 14px;margin:10px 0 10px 0;}}
-.tar-slider-card [data-testid="stSlider"] {{padding-top:0!important;}}
-.tar-slider-card [data-testid="stSlider"] div[data-baseweb="slider"] > div {{background:#D9E3E8!important;height:16px!important;border-radius:999px!important;}}
-.tar-slider-card [data-testid="stSlider"] div[data-baseweb="slider"] div[role="slider"] {{background:var(--s-primary)!important;border:3px solid #FFFFFF!important;box-shadow:0 1px 4px rgba(0,0,0,.20)!important;width:22px!important;height:22px!important;}}
-.tar-slider-card [data-testid="stSlider"] div[data-baseweb="slider"] div[style*="background"] {{background:var(--s-primary)!important;}}
-.tar-slider-label-row {{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 0.65fr;gap:4px;align-items:center;margin-top:-8px;}}
-.tar-slider-label {{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
-.tar-slider-label.active {{color:var(--s-primary-dark);}}
-.tar-slider-status {{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
+.tar-select-slider-wrap {{background:transparent!important;border:none!important;padding:0!important;margin:4px 0 6px 0;}}
+.tar-select-slider-wrap [data-testid="stSelectSlider"] {{padding-top:0!important;}}
+.tar-select-slider-wrap div[data-baseweb="slider"] > div {{background:#D9E3E8!important;height:16px!important;border-radius:999px!important;}}
+.tar-select-slider-wrap div[data-baseweb="slider"] div[role="slider"] {{background:var(--s-primary)!important;border:3px solid #FFFFFF!important;box-shadow:0 1px 4px rgba(0,0,0,.20)!important;width:22px!important;height:22px!important;}}
+.tar-select-slider-wrap div[data-baseweb="slider"] div[style*="background"] {{background:var(--s-primary)!important;}}
+.tar-slider-status {{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;margin-top:-10px;margin-bottom:4px;}}
 .kpi-card {{background:#FFFFFF;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
 .kpi-label {{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;}}
 .kpi-value {{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
@@ -262,16 +261,17 @@ h2 {{font-size:28px!important;line-height:34px!important;font-weight:700!importa
 .help-box-title {{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
 .empty-state {{background:#FFFFFF;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
 .empty-icon {{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
+.report-br-card {{background:#FFFFFF;border:1px solid #E2EBF0;border-left:6px solid var(--s-primary);border-radius:8px;padding:14px 18px;margin:12px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
+.report-br-title {{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}}
+.report-tar-line {{font-size:14px;margin:4px 0;color:var(--s-text);}}
 .streamlit-expanderHeader,[data-testid="stExpander"] summary {{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
-@media(max-width:620px) {{.tar-title-v36{{white-space:normal;}}}}
+@media(max-width:620px) {{.tar-title-v37{{white-space:normal;}}}}
 </style>
 """, unsafe_allow_html=True)
 
 inject_css()
 
-# ============================================================
 # SUPABASE
-# ============================================================
 
 def clean_supabase_url(url):
     if not url:
@@ -318,9 +318,7 @@ def s_data(response):
 def db_error_message(err):
     return str(err)
 
-# ============================================================
-# AUTH LEGACY
-# ============================================================
+# AUTH
 
 def hash_password(password, salt=None):
     if salt is None:
@@ -362,9 +360,7 @@ def migrate_plain_password(username, password):
 def update_user_login(username):
     supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
 
-# ============================================================
 # NOTES
-# ============================================================
 
 def unpack_notes(raw):
     if not raw:
@@ -381,9 +377,7 @@ def unpack_notes(raw):
 def pack_notes(br_notes, tar_notes):
     return NOTES_PREFIX + json.dumps({"br_notes": br_notes or "", "tar_notes": tar_notes or {}}, ensure_ascii=False)
 
-# ============================================================
-# MESOS
-# ============================================================
+# MONTHS
 
 def get_month_key(lang=None):
     now = datetime.now()
@@ -441,9 +435,7 @@ def next_month(month_text, target_lang=None):
         return f"{year + 1}-01"
     return f"{year:04d}-{month + 1:02d}"
 
-# ============================================================
 # MICROSOFT PREPARAT PER A FUTUR, NO VISIBLE
-# ============================================================
 
 def st_user_dict():
     try:
@@ -517,13 +509,7 @@ def is_admin_user(username):
 def list_users():
     return s_data(s_select("usuaris", "username, language, created_at, last_login").order("username").execute())
 
-# ============================================================
 # UI HELPERS
-# ============================================================
-
-def progress_color(progress):
-    return PRIMARY
-
 
 def progress_bar(progress, label=None):
     progress = int(progress or 0)
@@ -555,9 +541,7 @@ def logo_for_sidebar():
 def kpi_card(label, value):
     st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{label}</div><div class='kpi-value'>{value}</div></div>", unsafe_allow_html=True)
 
-# ============================================================
-# DADES
-# ============================================================
+# DATA
 
 def get_brs(username, month):
     query = s_select("big_rocks", "id, nom, persones, reunions, notes_progres, pregunta, passos").eq("username", username)
@@ -627,9 +611,7 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
         supabase.table("tars").insert(rows).execute()
     return br_id
 
-# ============================================================
 # AUTOSAVE
-# ============================================================
 
 def auto_save_br_fields(br_id, raw_current_notes, notes_key, preg_key, passos_key):
     br_notes_value = st.session_state.get(notes_key, "")
@@ -648,7 +630,7 @@ def auto_save_tar(tar_id, desc_key=None, progress_value=None):
     supabase.table("tars").update(payload).eq("id", tar_id).execute()
 
 
-def auto_save_tar_from_slider(tar_id, prog_key):
+def auto_save_tar_from_select_slider(tar_id, prog_key):
     value = int(st.session_state.get(prog_key, 0))
     auto_save_tar(tar_id, progress_value=value)
 
@@ -664,21 +646,17 @@ def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
     supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes), "updated_at": now_iso()}).eq("id", br_id).execute()
 
 
-def render_tar_slider(tar_id, prog_key, current_progress, disabled=False):
+def render_tar_select_slider(tar_id, prog_key, current_progress, disabled=False):
     current_progress = int(current_progress or 0)
-    st.markdown("<div class='tar-slider-card'>", unsafe_allow_html=True)
-    st.slider(t("state"), min_value=0, max_value=100, step=25, value=current_progress, key=prog_key, label_visibility="collapsed", disabled=disabled, on_change=auto_save_tar_from_slider, args=(tar_id, prog_key))
-    labels = []
-    for value in PROGRESS_OPTIONS:
-        cls = "active" if value == int(st.session_state.get(prog_key, current_progress)) else ""
-        labels.append(f"<div class='tar-slider-label {cls}'>{value}%</div>")
+    if current_progress not in PROGRESS_OPTIONS:
+        current_progress = 0
+    st.markdown("<div class='tar-select-slider-wrap'>", unsafe_allow_html=True)
+    st.select_slider(t("state"), options=PROGRESS_OPTIONS, value=current_progress, key=prog_key, label_visibility="collapsed", disabled=disabled, on_change=auto_save_tar_from_select_slider, args=(tar_id, prog_key))
     now_value = int(st.session_state.get(prog_key, current_progress))
-    st.markdown(f"""<div class='tar-slider-label-row'>{''.join(labels)}<div class='tar-slider-status'>{status_dot(now_value)} {now_value}%</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"<div class='tar-slider-status'>{status_dot(now_value)} {now_value}%</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ============================================================
 # STATE
-# ============================================================
 
 def remember_language(lang):
     if lang not in LANG_OPTIONS:
@@ -724,6 +702,16 @@ def initial_language():
         pass
     return st.session_state.get("last_language", "ca")
 
+
+def remembered_user_from_query():
+    try:
+        value = st.query_params.get("last_user")
+        if isinstance(value, list):
+            value = value[0]
+        return str(value or "")
+    except Exception:
+        return ""
+
 if "usuari_actual" not in st.session_state:
     st.session_state.usuari_actual = None
 if "idioma" not in st.session_state:
@@ -741,9 +729,7 @@ else:
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 
-# ============================================================
 # LOGIN
-# ============================================================
 
 if st.session_state.usuari_actual is None:
     left, center, right = st.columns([1, 1.35, 1])
@@ -755,7 +741,9 @@ if st.session_state.usuari_actual is None:
         tab1, tab2 = st.tabs([t("login_tab"), t("reg_tab")])
         with tab1:
             with st.form("legacy_login_form"):
-                usuari = st.text_input(t("email_user"), placeholder="usuario@sorigue.com")
+                default_user = remembered_user_from_query() or st.session_state.get("last_user_login", "")
+                usuari = st.text_input(t("email_user"), value=default_user, placeholder="usuario@sorigue.com")
+                recordar = st.checkbox(t("remember_user"), value=bool(default_user))
                 contrasenya = st.text_input(t("pwd"), type="password")
                 submitted = st.form_submit_button(t("enter"), type="primary", use_container_width=True)
                 if submitted:
@@ -768,6 +756,18 @@ if st.session_state.usuari_actual is None:
                             if user and verify_password(contrasenya, user.get("password"), user.get("password_salt")):
                                 st.session_state.usuari_actual = username_clean
                                 st.session_state.microsoft_user_name = username_clean
+                                st.session_state.last_user_login = username_clean
+                                if recordar:
+                                    try:
+                                        st.query_params["last_user"] = username_clean
+                                    except Exception:
+                                        pass
+                                else:
+                                    try:
+                                        if "last_user" in st.query_params:
+                                            del st.query_params["last_user"]
+                                    except Exception:
+                                        pass
                                 if user.get("language") in LANG_OPTIONS:
                                     remember_language(user.get("language"))
                                 update_user_login(username_clean)
@@ -803,9 +803,7 @@ if st.session_state.usuari_actual is None:
                             st.error(db_error_message(e))
     st.stop()
 
-# ============================================================
 # SIDEBAR
-# ============================================================
 
 USUARI = st.session_state.usuari_actual
 IS_ADMIN = is_admin_user(USUARI)
@@ -846,15 +844,15 @@ with st.sidebar:
     st.markdown("<div style='height:34px;'></div>", unsafe_allow_html=True)
     if st.button(t("logout"), use_container_width=True):
         last_lang = st.session_state.get("idioma", "ca")
+        saved_last_user = st.session_state.get("last_user_login", "")
         for key in ["usuari_actual", "pantalla", "mostrar_formulari_br", "open_br_id"]:
             if key in st.session_state:
                 del st.session_state[key]
+        st.session_state.last_user_login = saved_last_user
         remember_language(last_lang)
         st.rerun()
 
-# ============================================================
 # PANTALLES
-# ============================================================
 
 def render_admin_panel():
     if not IS_ADMIN:
@@ -884,43 +882,31 @@ def render_report(title, allow_close=False):
     brs = get_brs(USUARI, MES)
     tars = get_all_tars_for_brs([br["id"] for br in brs])
     tars_by_br = group_tars_by_br(tars)
-    tars_completats, tars_pendents, tars_en_curs = [], [], []
-    sumatori_progres, total_tars = 0, 0
-    for br in brs:
-        for tar in tars_by_br.get(br["id"], []):
-            desc = tar.get("descripcio") or ""
-            progres = int(tar.get("progres") or 0)
-            sumatori_progres += progres
-            total_tars += 1
-            if progres == 100:
-                tars_completats.append((br.get("nom") or "", desc))
-            elif progres == 0:
-                tars_pendents.append((br.get("nom") or "", desc, progres))
-            else:
-                tars_en_curs.append((br.get("nom") or "", desc, progres))
-    compliment_global = int(sumatori_progres / total_tars) if total_tars else 0
+    all_stats = stats_from_tars(tars)
     st.markdown(f"### {t('global_comp')}")
-    progress_bar(compliment_global, f"{compliment_global}%")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.success(t("successes"))
-        for nom, desc in tars_completats or []:
-            st.markdown(f"- **{nom}** → {desc}")
-    with c2:
-        st.info(t("in_progress"))
-        for nom, desc, progres in tars_en_curs or []:
-            st.markdown(f"- **{nom}** → {desc} ({progres}%)")
-    with c3:
-        st.warning(t("carry_over"))
-        for nom, desc, progres in tars_pendents or []:
-            st.markdown(f"- **{nom}** → {desc} ({progres}%)")
+    progress_bar(all_stats["avg"], f"{all_stats['avg']}%")
+    for br in brs:
+        br_tars = tars_by_br.get(br["id"], [])
+        br_stats = stats_from_tars(br_tars)
+        st.markdown(f"<div class='report-br-card'><div class='report-br-title'>📌 {safe_html(br.get('nom') or '')} · {br_stats['avg']}%</div>", unsafe_allow_html=True)
+        if br_tars:
+            for tar in br_tars:
+                progres = int(tar.get("progres") or 0)
+                desc = safe_html(tar.get("descripcio") or tar.get("num") or "TAR")
+                st.markdown(f"<div class='report-tar-line'>{status_dot(progres)} <strong>{desc}</strong> ({progres}%)</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='report-tar-line'>—</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    if allow_close and not es_tancat:
+        if st.button(t("confirm_close"), type="primary", use_container_width=True):
+            close_month(USUARI, MES)
+            st.session_state.pantalla = "dashboard"
+            st.rerun()
     if st.button(t("back")):
         st.session_state.pantalla = "dashboard"
         st.rerun()
 
-# ============================================================
 # DASHBOARD
-# ============================================================
 
 MES = st.session_state.mes_actual
 es_tancat = month_is_closed(USUARI, MES)
@@ -930,7 +916,7 @@ if st.session_state.pantalla == "admin":
 elif st.session_state.pantalla == "informe":
     render_report(t("report_title"), allow_close=False)
 elif st.session_state.pantalla == "resum":
-    render_report(t("summary"), allow_close=False)
+    render_report(t("summary"), allow_close=True)
 else:
     brs = get_brs(USUARI, MES)
     all_tars = get_all_tars_for_brs([br["id"] for br in brs])
@@ -1015,18 +1001,18 @@ else:
                 with st.container(border=True):
                     side_col, main_col = st.columns([0.08, 11.92], vertical_alignment="top")
                     with side_col:
-                        st.markdown("<div class='tar-left-blue-v36'></div>", unsafe_allow_html=True)
+                        st.markdown("<div class='tar-left-blue-v37'></div>", unsafe_allow_html=True)
                     with main_col:
                         title_col, edit_col = st.columns([10.8, 0.8], vertical_alignment="center")
                         with title_col:
-                            st.markdown(f"<div class='tar-title-v36'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='tar-title-v37'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
                         with edit_col:
-                            st.markdown("<div class='tar-edit-btn-v36'>", unsafe_allow_html=True)
+                            st.markdown("<div class='tar-edit-btn-v37'>", unsafe_allow_html=True)
                             st.button("✏️", key=f"btn_edit_{tar_id}", disabled=es_tancat, on_click=toggle_tar_edit, args=(tar_id,))
                             st.markdown("</div>", unsafe_allow_html=True)
                         if st.session_state.get(f"editing_{tar_id}", False):
                             st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"), on_change=auto_save_tar, args=(tar_id, desc_key, None))
-                        render_tar_slider(tar_id, prog_key, current_progress, disabled=es_tancat)
+                        render_tar_select_slider(tar_id, prog_key, current_progress, disabled=es_tancat)
                         with st.expander(t("tar_notes"), expanded=False):
                             st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed", on_change=auto_save_tar_note, args=(br_id, br.get("notes_progres"), tar_id, note_key))
     if not es_tancat:
