@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V34
+# BIG ROCKS - SORIGUE | APP.py V35
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# Barra visual clicable + auto-save + barra lateral completa
+# Barra visual amb segments clicables natius + auto-save
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -323,6 +323,18 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 .clickable-segment-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
 .clickable-segment-label.active{{color:var(--s-primary-dark);}}
 .clickable-segment-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
+
+
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
+.native-seg-card{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}}
+.native-seg-label-grid{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 0.55fr;gap:4px;align-items:center;margin-top:2px;}}
+.native-seg-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
+.native-seg-label.active{{color:var(--s-primary-dark);}}
+.native-seg-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
+.native-seg-active div[data-testid="stButton"] button{{height:12px!important;min-height:12px!important;padding:0!important;border-radius:999px!important;background:var(--s-primary)!important;border:1px solid var(--s-primary)!important;color:transparent!important;font-size:0!important;line-height:0!important;}}
+.native-seg-active div[data-testid="stButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:transparent!important;}}
+.native-seg-inactive div[data-testid="stButton"] button{{height:12px!important;min-height:12px!important;padding:0!important;border-radius:999px!important;background:#D9E3E8!important;border:1px solid #D9E3E8!important;color:transparent!important;font-size:0!important;line-height:0!important;}}
+.native-seg-inactive div[data-testid="stButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:transparent!important;}}
 
 </style>
 """, unsafe_allow_html=True)
@@ -765,30 +777,38 @@ def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
 
 
 def render_clickable_segment_bar(tar_id, prog_key, current_progress, disabled=False):
-    """Barra visual clicable: cada segment és un enllaç que desa el % via query param."""
+    """Barra visual clicable amb botons natius de Streamlit: no obre enllaços externs."""
     current_progress = int(current_progress or 0)
     active_segments = current_progress // 25
-    hrefs = []
+    st.markdown("<div class='native-seg-card'>", unsafe_allow_html=True)
+    seg_cols = st.columns(4, gap="small")
     for i, value in enumerate([25, 50, 75, 100], start=1):
-        cls = "active" if i <= active_segments and current_progress > 0 else ""
-        href = "#" if disabled else f"?set_tar_progress={tar_id}:{value}"
-        hrefs.append(f"<a class='{cls}' href='{href}' title='{value}%'></a>")
+        wrapper_class = "native-seg-active" if active_segments >= i and current_progress > 0 else "native-seg-inactive"
+        with seg_cols[i - 1]:
+            st.markdown(f"<div class='{wrapper_class}'>", unsafe_allow_html=True)
+            st.button(
+                " ",
+                key=f"barseg_{tar_id}_{value}",
+                disabled=disabled,
+                on_click=set_tar_progress,
+                args=(tar_id, prog_key, value),
+                use_container_width=True,
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
     labels = []
     for value in PROGRESS_OPTIONS:
         cls = "active" if value == current_progress else ""
-        labels.append(f"<div class='clickable-segment-label {cls}'>{value}%</div>")
+        labels.append(f"<div class='native-seg-label {cls}'>{value}%</div>")
     st.markdown(
         f"""
-        <div class='clickable-segment-card'>
-            <div class='clickable-segment-bar'>{''.join(hrefs)}</div>
-            <div class='clickable-segment-bottom'>
-                {''.join(labels)}
-                <div class='clickable-segment-status'>{status_dot(current_progress)} {current_progress}%</div>
-            </div>
+        <div class='native-seg-label-grid'>
+            {''.join(labels)}
+            <div class='native-seg-status'>{status_dot(current_progress)} {current_progress}%</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # STATE
@@ -855,29 +875,6 @@ else:
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 
-# Gestiona clics sobre la barra de compliment TAR via query params.
-def process_tar_progress_query_param():
-    try:
-        raw = st.query_params.get("set_tar_progress")
-        if isinstance(raw, list):
-            raw = raw[0]
-        if raw:
-            tar_id_text, value_text = str(raw).split(":", 1)
-            tar_id_q = int(tar_id_text)
-            value_q = int(value_text)
-            if value_q in PROGRESS_OPTIONS:
-                prog_key_q = f"prog_{tar_id_q}"
-                st.session_state[prog_key_q] = value_q
-                auto_save_tar(tar_id_q, progress_value=value_q)
-            try:
-                del st.query_params["set_tar_progress"]
-            except Exception:
-                st.query_params.clear()
-            st.rerun()
-    except Exception as e:
-        st.error(db_error_message(e))
-
-process_tar_progress_query_param()
 
 # ============================================================
 # LOGIN
