@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V28
+# BIG ROCKS - SORIGUE | APP.py V29
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# Vista comparativa de % de compliment dels TARs
+# Opció B segments + TAR dins targeta + edició amb llapis
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -277,6 +277,13 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 .empty-state{{background:#fff;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
 .empty-icon{{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
 .streamlit-expanderHeader,[data-testid="stExpander"] summary{{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
+
+.progress-segments-only{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}
+.segment-row-large .segment-box{height:10px;}
+.segment-percent{margin-left:8px;font-size:13px;color:var(--s-text);white-space:nowrap;}
+.tar-card-inner{width:100%;}
+.pencil-expander [data-testid="stExpander"] summary{min-height:30px!important;}
+
 @media(max-width:900px){{.progress-preview-grid{{grid-template-columns:1fr 1fr;}}}}
 @media(max-width:620px){{.progress-preview-grid{{grid-template-columns:1fr;}}.tar-header-one-line{{white-space:normal;}}}}
 </style>
@@ -575,27 +582,13 @@ def progress_radio_label(value):
 def progress_preview_html(progress):
     progress = int(progress or 0)
     active_segments = progress // 25
-    segments = "".join([f"<span class='segment-box {'segment-on' if i <= active_segments and progress > 0 else ''}'></span>" for i in range(1, 5)])
-    pills = "".join([f"<span class='mini-pill {'mini-pill-active' if value == progress else ''}'>{progress_radio_label(value)}</span>" for value in PROGRESS_OPTIONS])
+    segments = "".join([
+        f"<span class='segment-box {'segment-on' if i <= active_segments and progress > 0 else ''}'></span>"
+        for i in range(1, 5)
+    ])
     return f"""
-    <div class="progress-preview-grid">
-        <div class="progress-preview">
-            <div class="progress-preview-title">{t('view_buttons')}</div>
-            <div>{progress_radio_label(progress)}</div>
-        </div>
-        <div class="progress-preview">
-            <div class="progress-preview-title">{t('view_segments')}</div>
-            <div class="segment-row">{segments}<strong style="margin-left:6px;font-size:12px;">{progress}%</strong></div>
-        </div>
-        <div class="progress-preview">
-            <div class="progress-preview-title">{t('view_pills')}</div>
-            <div class="pill-row">{pills}</div>
-        </div>
-        <div class="progress-preview">
-            <div class="progress-preview-title">{t('view_bar')}</div>
-            <div class="bar-thin"><div class="bar-thin-inner" style="width:{progress}%;"></div></div>
-            <div style="font-size:12px;font-weight:700;margin-top:4px;">{progress_radio_label(progress)}</div>
-        </div>
+    <div class="progress-segments-only">
+        <div class="segment-row segment-row-large">{segments}<strong class="segment-percent">{status_dot(progress)} {progress}%</strong></div>
     </div>
     """
 
@@ -1073,19 +1066,20 @@ else:
                     displayed_desc = st.session_state.get(desc_key, tar.get("descripcio") or "")
                     if not displayed_desc.strip():
                         displayed_desc = tar.get("num") or "TAR"
-                    st.markdown("<div class='tar-edit-card'>", unsafe_allow_html=True)
-                    c_title, c_edit = st.columns([11, 1])
-                    with c_title:
-                        st.markdown(f"<div class='tar-header-one-line'><div class='tar-title-inline'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div><div class='tar-right-inline'>{status_dot(current_progress)} {current_progress}%</div></div>", unsafe_allow_html=True)
-                    with c_edit:
-                        st.checkbox("✏️", key=edit_key, disabled=es_tancat, label_visibility="visible")
-                    if st.session_state.get(edit_key):
-                        st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
-                    st.radio(t("state"), options=PROGRESS_OPTIONS, format_func=progress_radio_label, index=PROGRESS_OPTIONS.index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
-                    st.markdown(progress_preview_html(st.session_state.get(prog_key, current_progress)), unsafe_allow_html=True)
-                    with st.expander(t("tar_notes"), expanded=False):
-                        st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    # Targeta real de Streamlit perquè tot quedi dins del rectangle i no surti cap línia buida.
+                    with st.container(border=True):
+                        c_title, c_progress, c_edit = st.columns([8.5, 2, 0.8], vertical_alignment="center")
+                        with c_title:
+                            st.markdown(f"<div class='tar-title-inline'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
+                        with c_progress:
+                            st.markdown(f"<div class='tar-right-inline'>{status_dot(current_progress)} {current_progress}%</div>", unsafe_allow_html=True)
+                        with c_edit:
+                            with st.expander("✏️", expanded=False):
+                                st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
+                        st.radio(t("state"), options=PROGRESS_OPTIONS, format_func=progress_radio_label, index=PROGRESS_OPTIONS.index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
+                        st.markdown(progress_preview_html(st.session_state.get(prog_key, current_progress)), unsafe_allow_html=True)
+                        with st.expander(t("tar_notes"), expanded=False):
+                            st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
                     tar_updates[tar_id] = {"descripcio": st.session_state.get(desc_key, displayed_desc), "progres": st.session_state.get(prog_key, progres)}
                     tar_note_updates[tar_id] = st.session_state.get(note_key, tar_notes.get(str(tar_id), ""))
                 submit_bigrock = st.form_submit_button(t("save_full_br"), type="primary", use_container_width=True, disabled=es_tancat)
