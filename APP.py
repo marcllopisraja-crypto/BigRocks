@@ -1,4 +1,6 @@
 
+import base64
+import hashlib
 import html
 import json
 import os
@@ -10,13 +12,15 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V26.1
-# Login usuari/contrasenya; Microsoft ocult fins que estigui habilitat
-# Manté migració exacta usuaris antics i TARs compactes
+# BIG ROCKS - SORIGUE | APP.py V28
+# Login net amb correu @sorigue.com + TARs en una sola línia
+# Vista comparativa de % de compliment dels TARs
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
 ALLOWED_EMAIL_DOMAIN = "@sorigue.com"
+MICROSOFT_LOGIN_ENABLED = False  # ocult fins que IT habiliti Entra App Registration
+
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
 PRIMARY_HOVER = "#43B8ED"
@@ -25,7 +29,10 @@ GREY = "#53565A"
 SUCCESS = "#03A446"
 WARNING = "#D9AF00"
 ERROR = "#E53A4F"
+LIGHT_BLUE = "#E7F2F7"
+
 LANG_OPTIONS = {"ca": "🇦🇩 Català", "es": "🇪🇸 Español"}
+PROGRESS_OPTIONS = [0, 25, 50, 75, 100]
 
 USER_EMAIL_MIGRATION = {
     "marc.llopis@sorigue.com": ["marc.llopis", "Marc.llopis", "marc llopis", "Marc Llopis", "marc"],
@@ -36,59 +43,250 @@ st.set_page_config(page_title="Big Rocks - Sorigué", layout="wide", page_icon="
 
 TRANS = {
     "ca": {
-        "login_title":"Accés a la Plataforma","login_subtitle":"Seguiment mensual dels teus Big Rocks i TARs","ms_login":"Iniciar sessió amb Microsoft","ms_only":"Només s'accepten comptes corporatius @sorigue.com.","ms_pending":"Opció Microsoft preparada. Quan IT registri l'aplicació a Entra i afegeixis els Secrets, aquest botó quedarà operatiu.","ms_wrong_domain":"Aquest compte no és @sorigue.com. Utilitza el correu corporatiu de Sorigué.","ms_not_configured":"Microsoft Login encara no està configurat o falta Authlib. Pots entrar amb usuari/contrasenya temporal.","legacy_login":"Accés amb usuari i contrasenya","login_tab":"Iniciar sessió","reg_tab":"Registrar usuari","usr":"Usuari","pwd":"Contrasenya","new_usr":"Nou usuari","lang_reg":"Idioma per defecte","enter":"Entrar","register":"Registrar","err_login":"Usuari o contrasenya incorrectes.","succ_reg":"Usuari creat correctament.","err_reg":"Aquest usuari ja existeix.","required_fields":"Introdueix usuari i contrasenya per continuar.","corp_email_required":"El registre només permet correus corporatius @sorigue.com.","lang_login":"🌍 Idioma","lang":"Idioma","conn_as":"Connectat com:","nav_months":"Navegar pels mesos","status_open":"Obert","status_closed":"Tancat","open_month":"Mes obert i editable","closed_month":"Aquest mes està tancat.","unlock":"Desbloquejar mes","logout":"Tancar sessió","eval_close":"Avaluar i tancar mes","eval_no_close":"Avaluar sense tancar","collapse_all":"Contraure els BR","active_brs":"Big Rocks actives","completed_tars":"TARs completats","pending_tars":"TARs pendents","avg_progress":"Progrés mitjà","help_title":"Consell d'usabilitat","help_body":"Clica una Big Rock per obrir-la. La resta quedaran plegades per mantenir la vista neta.","no_br_title":"Encara no tens cap Big Rock creada","no_br_body":"Crea la primera Big Rock per començar el seguiment mensual.","empty_cta":"Crea la primera Big Rock","key_ppl":"Persones clau","key_meet":"Reunions","details":"Detalls, preguntes i pròxims passos","prog":"Detalls de progrés","need":"Pregunta o necessitat","next_steps":"Pròxims passos","state":"Estat","desc":"Descripció de la tasca","tar_notes":"Anotacions de la TAR","tar_notes_placeholder":"Escriu observacions, acords, incidències o seguiment específic d'aquesta TAR...","edit_title":"✏️ Editar títol","save_full_br":"Guardar Big Rock","create_br":"Crear nova Big Rock","config_br":"Configura la teva nova Big Rock","title_br":"Títol de la Big Rock","title_placeholder":"Ex. Reduir incidències crítiques de l'obra","people_placeholder":"Ex. Xavier, Gerard, equip nord...","meetings_placeholder":"Ex. Seguiment setmanal, comitè mensual...","tar_placeholder":"Descriu una acció concreta i mesurable","save":"Guardar Big Rock","saved":"Canvis guardats correctament.","summary":"Resum de tancament","report_title":"Informe de seguiment","global_comp":"Grau de compliment global","successes":"Èxits completats","in_progress":"En curs","carry_over":"Es traspassen","cancel":"Cancel·lar i tornar","confirm_close":"Confirmar tancament i crear mes següent","back":"Tornar","admin_panel":"⚙ Administració","admin_badge":"Administrador","admin_users":"Gestió d'usuaris","admin_no_users":"No s'han trobat usuaris.","force_migration":"Forçar migració usuaris antics","migration_ok":"Migració executada.","supabase_error":"No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets.","months":["Gener","Febrer","Març","Abril","Maig","Juny","Juliol","Agost","Setembre","Octubre","Novembre","Desembre"]
+        "login_title": "Accés a la Plataforma",
+        "login_subtitle": "Seguiment mensual dels teus Big Rocks i TARs",
+        "legacy_login": "Accés amb usuari i contrasenya",
+        "login_tab": "Iniciar sessió",
+        "reg_tab": "Registrar usuari",
+        "usr": "Usuari",
+        "email_user": "Correu corporatiu",
+        "pwd": "Contrasenya",
+        "new_usr": "Correu corporatiu",
+        "lang_reg": "Idioma per defecte",
+        "enter": "Entrar",
+        "register": "Registrar",
+        "err_login": "Usuari o contrasenya incorrectes.",
+        "succ_reg": "Usuari creat correctament.",
+        "err_reg": "Aquest usuari ja existeix.",
+        "required_fields": "Introdueix usuari i contrasenya per continuar.",
+        "corp_email_required": "El registre només permet correus corporatius @sorigue.com.",
+        "lang_login": "🌍 Idioma",
+        "lang": "Idioma",
+        "conn_as": "Connectat com:",
+        "nav_months": "Navegar pels mesos",
+        "status_open": "Obert",
+        "status_closed": "Tancat",
+        "open_month": "Mes obert i editable",
+        "closed_month": "Aquest mes està tancat.",
+        "unlock": "Desbloquejar mes",
+        "logout": "Tancar sessió",
+        "eval_close": "Avaluar i tancar mes",
+        "eval_no_close": "Avaluar sense tancar",
+        "collapse_all": "Contraure els BR",
+        "active_brs": "Big Rocks actives",
+        "completed_tars": "TARs completats",
+        "pending_tars": "TARs pendents",
+        "avg_progress": "Progrés mitjà",
+        "help_title": "Consell d'usabilitat",
+        "help_body": "Clica una Big Rock per obrir-la. La resta quedaran plegades per mantenir la vista neta.",
+        "no_br_title": "Encara no tens cap Big Rock creada",
+        "no_br_body": "Crea la primera Big Rock per començar el seguiment mensual.",
+        "empty_cta": "Crea la primera Big Rock",
+        "key_ppl": "Persones clau",
+        "key_meet": "Reunions",
+        "details": "Detalls, preguntes i pròxims passos",
+        "prog": "Detalls de progrés",
+        "need": "Pregunta o necessitat",
+        "next_steps": "Pròxims passos",
+        "state": "Estat",
+        "desc": "Descripció de la tasca",
+        "tar_notes": "Anotacions de la TAR",
+        "tar_notes_placeholder": "Escriu observacions, acords, incidències o seguiment específic d'aquesta TAR...",
+        "save_full_br": "Guardar Big Rock",
+        "create_br": "Crear nova Big Rock",
+        "config_br": "Configura la teva nova Big Rock",
+        "title_br": "Títol de la Big Rock",
+        "title_placeholder": "Ex. Reduir incidències crítiques de l'obra",
+        "people_placeholder": "Ex. Xavier, Gerard, equip nord...",
+        "meetings_placeholder": "Ex. Seguiment setmanal, comitè mensual...",
+        "tar_placeholder": "Descriu una acció concreta i mesurable",
+        "save": "Guardar Big Rock",
+        "saved": "Canvis guardats correctament.",
+        "summary": "Resum de tancament",
+        "report_title": "Informe de seguiment",
+        "global_comp": "Grau de compliment global",
+        "successes": "Èxits completats",
+        "in_progress": "En curs",
+        "carry_over": "Es traspassen",
+        "cancel": "Cancel·lar i tornar",
+        "confirm_close": "Confirmar tancament i crear mes següent",
+        "back": "Tornar",
+        "admin_panel": "⚙ Administració",
+        "admin_badge": "Administrador",
+        "admin_users": "Gestió d'usuaris",
+        "admin_no_users": "No s'han trobat usuaris.",
+        "force_migration": "Forçar migració usuaris antics",
+        "migration_ok": "Migració executada.",
+        "progress_views": "Vistes de compliment",
+        "view_buttons": "Opció A · Botons",
+        "view_segments": "Opció B · Segments",
+        "view_pills": "Opció C · Pastilles",
+        "view_bar": "Opció D · Barra fina",
+        "supabase_error": "No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets.",
+        "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
     "es": {
-        "login_title":"Acceso a la Plataforma","login_subtitle":"Seguimiento mensual de tus Big Rocks y TARs","ms_login":"Iniciar sesión con Microsoft","ms_only":"Solo se aceptan cuentas corporativas @sorigue.com.","ms_pending":"Opción Microsoft preparada. Cuando IT registre la aplicación en Entra y añadas los Secrets, este botón quedará operativo.","ms_wrong_domain":"Esta cuenta no es @sorigue.com. Usa el correo corporativo de Sorigué.","ms_not_configured":"Microsoft Login aún no está configurado o falta Authlib. Puedes entrar con usuario/contraseña temporal.","legacy_login":"Acceso con usuario y contraseña","login_tab":"Iniciar sesión","reg_tab":"Registrar usuario","usr":"Usuario","pwd":"Contraseña","new_usr":"Nuevo usuario","lang_reg":"Idioma por defecto","enter":"Entrar","register":"Registrar","err_login":"Usuario o contraseña incorrectos.","succ_reg":"Usuario creado correctamente.","err_reg":"Este usuario ya existe.","required_fields":"Introduce usuario y contraseña para continuar.","corp_email_required":"El registro solo permite correos corporativos @sorigue.com.","lang_login":"🌍 Idioma","lang":"Idioma","conn_as":"Conectado como:","nav_months":"Navegar por los meses","status_open":"Abierto","status_closed":"Cerrado","open_month":"Mes abierto y editable","closed_month":"Este mes está cerrado.","unlock":"Desbloquear mes","logout":"Cerrar sesión","eval_close":"Evaluar y cerrar mes","eval_no_close":"Evaluar sin cerrar","collapse_all":"Contraer BR","active_brs":"Big Rocks activas","completed_tars":"TARs completados","pending_tars":"TARs pendientes","avg_progress":"Progreso medio","help_title":"Consejo de usabilidad","help_body":"Haz clic en una Big Rock para abrirla. El resto quedarán plegadas para mantener la vista limpia.","no_br_title":"Aún no tienes ninguna Big Rock creada","no_br_body":"Crea la primera Big Rock para empezar el seguimiento mensual.","empty_cta":"Crea la primera Big Rock","key_ppl":"Personas clave","key_meet":"Reuniones","details":"Detalles, preguntas y próximos pasos","prog":"Detalles de progreso","need":"Pregunta o necesidad","next_steps":"Próximos pasos","state":"Estado","desc":"Descripción de la tarea","tar_notes":"Anotaciones de la TAR","tar_notes_placeholder":"Escribe observaciones, acuerdos, incidencias o seguimiento específico de esta TAR...","edit_title":"✏️ Editar título","save_full_br":"Guardar Big Rock","create_br":"Crear nueva Big Rock","config_br":"Configura tu nueva Big Rock","title_br":"Título de la Big Rock","title_placeholder":"Ej. Reducir incidencias críticas de la obra","people_placeholder":"Ej. Xavier, Gerard, equipo norte...","meetings_placeholder":"Ej. Seguimiento semanal, comité mensual...","tar_placeholder":"Describe una acción concreta y medible","save":"Guardar Big Rock","saved":"Cambios guardados correctamente.","summary":"Resumen de cierre","report_title":"Informe de seguimiento","global_comp":"Grado de cumplimiento global","successes":"Éxitos completados","in_progress":"En curso","carry_over":"Se traspasan","cancel":"Cancelar y volver","confirm_close":"Confirmar cierre y crear mes siguiente","back":"Volver","admin_panel":"⚙ Administración","admin_badge":"Administrador","admin_users":"Gestión de usuarios","admin_no_users":"No se han encontrado usuarios.","force_migration":"Forzar migración usuarios antiguos","migration_ok":"Migración ejecutada.","supabase_error":"No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets.","months":["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+        "login_title": "Acceso a la Plataforma",
+        "login_subtitle": "Seguimiento mensual de tus Big Rocks y TARs",
+        "legacy_login": "Acceso con usuario y contraseña",
+        "login_tab": "Iniciar sesión",
+        "reg_tab": "Registrar usuario",
+        "usr": "Usuario",
+        "email_user": "Correo corporativo",
+        "pwd": "Contraseña",
+        "new_usr": "Correo corporativo",
+        "lang_reg": "Idioma por defecto",
+        "enter": "Entrar",
+        "register": "Registrar",
+        "err_login": "Usuario o contraseña incorrectos.",
+        "succ_reg": "Usuario creado correctamente.",
+        "err_reg": "Este usuario ya existe.",
+        "required_fields": "Introduce usuario y contraseña para continuar.",
+        "corp_email_required": "El registro solo permite correos corporativos @sorigue.com.",
+        "lang_login": "🌍 Idioma",
+        "lang": "Idioma",
+        "conn_as": "Conectado como:",
+        "nav_months": "Navegar por los meses",
+        "status_open": "Abierto",
+        "status_closed": "Cerrado",
+        "open_month": "Mes abierto y editable",
+        "closed_month": "Este mes está cerrado.",
+        "unlock": "Desbloquear mes",
+        "logout": "Cerrar sesión",
+        "eval_close": "Evaluar y cerrar mes",
+        "eval_no_close": "Evaluar sin cerrar",
+        "collapse_all": "Contraer BR",
+        "active_brs": "Big Rocks activas",
+        "completed_tars": "TARs completados",
+        "pending_tars": "TARs pendientes",
+        "avg_progress": "Progreso medio",
+        "help_title": "Consejo de usabilidad",
+        "help_body": "Haz clic en una Big Rock para abrirla. El resto quedarán plegadas para mantener la vista limpia.",
+        "no_br_title": "Aún no tienes ninguna Big Rock creada",
+        "no_br_body": "Crea la primera Big Rock para empezar el seguimiento mensual.",
+        "empty_cta": "Crea la primera Big Rock",
+        "key_ppl": "Personas clave",
+        "key_meet": "Reuniones",
+        "details": "Detalles, preguntas y próximos pasos",
+        "prog": "Detalles de progreso",
+        "need": "Pregunta o necesidad",
+        "next_steps": "Próximos pasos",
+        "state": "Estado",
+        "desc": "Descripción de la tarea",
+        "tar_notes": "Anotaciones de la TAR",
+        "tar_notes_placeholder": "Escribe observaciones, acuerdos, incidencias o seguimiento específico de esta TAR...",
+        "save_full_br": "Guardar Big Rock",
+        "create_br": "Crear nueva Big Rock",
+        "config_br": "Configura tu nueva Big Rock",
+        "title_br": "Título de la Big Rock",
+        "title_placeholder": "Ej. Reducir incidencias críticas de la obra",
+        "people_placeholder": "Ej. Xavier, Gerard, equipo norte...",
+        "meetings_placeholder": "Ej. Seguimiento semanal, comité mensual...",
+        "tar_placeholder": "Describe una acción concreta y medible",
+        "save": "Guardar Big Rock",
+        "saved": "Cambios guardados correctamente.",
+        "summary": "Resumen de cierre",
+        "report_title": "Informe de seguimiento",
+        "global_comp": "Grado de cumplimiento global",
+        "successes": "Éxitos completados",
+        "in_progress": "En curso",
+        "carry_over": "Se traspasan",
+        "cancel": "Cancelar y volver",
+        "confirm_close": "Confirmar cierre y crear mes siguiente",
+        "back": "Volver",
+        "admin_panel": "⚙ Administración",
+        "admin_badge": "Administrador",
+        "admin_users": "Gestión de usuarios",
+        "admin_no_users": "No se han encontrado usuarios.",
+        "force_migration": "Forzar migración usuarios antiguos",
+        "migration_ok": "Migración ejecutada.",
+        "progress_views": "Vistas de cumplimiento",
+        "view_buttons": "Opción A · Botones",
+        "view_segments": "Opción B · Segmentos",
+        "view_pills": "Opción C · Pastillas",
+        "view_bar": "Opción D · Barra fina",
+        "supabase_error": "No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets.",
+        "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
 }
+
 
 def t(key):
     return TRANS.get(st.session_state.get("idioma", "ca"), TRANS["ca"]).get(key, key)
 
+
 def lang_label(code):
     return LANG_OPTIONS.get(code, code)
 
+
 def safe_html(value):
     return html.escape(str(value or ""))
+
 
 def inject_css():
     st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
-:root{{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};}}
+:root{{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-success:{SUCCESS};--s-warning:{WARNING};--s-error:{ERROR};--s-light-blue:{LIGHT_BLUE};}}
 html,body,input,textarea,button,select{{font-family:'Montserrat',Arial,sans-serif!important;}}
+p,label,h1,h2,h3,h4,h5,h6,[data-testid="stMarkdownContainer"],[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-baseweb="select"] div,[data-baseweb="select"] span{{font-family:'Montserrat',Arial,sans-serif!important;}}
 .block-container{{padding-top:1.8rem;padding-bottom:3rem;max-width:1360px;}}
+h1{{font-size:42px!important;line-height:50px!important;font-weight:700!important;color:var(--s-text)!important;}}
+h2{{font-size:28px!important;line-height:34px!important;font-weight:700!important;color:var(--s-text)!important;}}
 .login-logo-text{{color:#fff;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
 [data-testid="stSidebar"]{{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%)!important;}}
 [data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] .sidebar-white{{color:#fff!important;}}
+[data-testid="stSidebar"] label{{font-weight:700!important;}}
 .sidebar-logo-text{{color:#fff;font-size:48px;font-weight:700;text-align:center;margin:20px 0 8px 0;}}
 .sidebar-app-title{{color:#fff;font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}}
 .sidebar-app-subtitle{{color:rgba(255,255,255,.88);font-size:13px;text-align:center;margin-bottom:22px;}}
 .sidebar-status-card{{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.38);border-radius:8px;padding:14px 16px;margin:14px 0 18px 0;}}
 .sidebar-pill{{display:inline-flex;border-radius:999px;padding:7px 13px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:700;}}
+[data-baseweb="select"] > div{{background:#fff!important;border:1px solid #BBBBBB!important;border-radius:4px!important;min-height:40px!important;}}
+[data-baseweb="select"] span,[data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] span,[data-testid="stSidebar"] [data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] input{{color:var(--s-text)!important;}}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea{{border-radius:4px!important;border:1px solid #BBBBBB!important;color:var(--s-text)!important;background:#fff!important;min-height:40px!important;}}
 .stButton>button,[data-testid="stFormSubmitButton"] button{{border-radius:4px!important;min-height:38px!important;font-weight:700!important;border:1px solid var(--s-primary)!important;background:var(--s-primary)!important;color:#fff!important;}}
 .stButton>button:hover,[data-testid="stFormSubmitButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#fff!important;}}
 [data-testid="stSidebar"] .stButton>button{{background:rgba(255,255,255,.10)!important;border:1px solid rgba(255,255,255,.48)!important;color:#fff!important;}}
 .open-card-button button{{text-align:left!important;background:#fff!important;color:var(--s-text)!important;border:1px solid #EEF2F4!important;border-left:6px solid var(--s-primary)!important;border-radius:8px!important;box-shadow:0 2px 9px rgba(35,35,35,.08)!important;padding:14px 18px!important;height:auto!important;min-height:86px!important;}}
-.info-card,.tar-edit-card{{background:#fff;border-radius:8px;padding:14px 16px;margin:12px 0 16px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
+.open-card-button button:hover{{background:#F7FBFD!important;border-color:#C6E0EC!important;color:var(--s-text)!important;}}
+.info-card,.tar-edit-card{{background:#fff;border-radius:8px;padding:12px 14px;margin:10px 0 12px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
 .info-card-meta{{color:var(--s-grey);font-size:13px;}}
-.tar-title-line{{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}}
-.tar-title-text{{font-size:15px;font-weight:700;color:var(--s-primary-dark);line-height:21px;}}
-.tar-header-progress{{font-size:13px;font-weight:700;color:var(--s-text);}}
+.tar-header-one-line{{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;white-space:nowrap;}}
+.tar-title-inline{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}}
+.tar-right-inline{{display:flex;align-items:center;gap:10px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--s-text);}}
+.tar-pencil{{font-size:16px;color:var(--s-primary-dark);}}
+.progress-preview-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:8px 0 2px 0;}}
+.progress-preview{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;min-height:58px;}}
+.progress-preview-title{{font-size:11px;font-weight:700;color:var(--s-grey);margin-bottom:6px;}}
+.segment-row{{display:flex;gap:3px;align-items:center;}}
+.segment-box{{height:9px;flex:1;border-radius:999px;background:#D9E3E8;}}
+.segment-on{{background:var(--s-primary);}}
+.pill-row{{display:flex;gap:4px;flex-wrap:wrap;}}
+.mini-pill{{font-size:11px;border-radius:999px;padding:3px 6px;background:#E8EEF2;color:#53565A;font-weight:700;}}
+.mini-pill-active{{background:var(--s-primary);color:#fff;}}
+.bar-thin{{height:8px;border-radius:999px;background:#E0E2E3;overflow:hidden;}}
+.bar-thin-inner{{height:100%;border-radius:999px;background:var(--s-primary);}}
 .kpi-card{{background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
 .kpi-label{{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;}}
 .kpi-value{{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
 .s-progress{{width:100%;background:#E0E2E3;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
 .s-progress-inner{{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;min-width:38px;}}
-.help-box{{background:#E7F2F7;border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
+.help-box{{background:var(--s-light-blue);border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
 .help-box-title{{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
 .empty-state{{background:#fff;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
 .empty-icon{{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
+.streamlit-expanderHeader,[data-testid="stExpander"] summary{{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
+@media(max-width:900px){{.progress-preview-grid{{grid-template-columns:1fr 1fr;}}}}
+@media(max-width:620px){{.progress-preview-grid{{grid-template-columns:1fr;}}.tar-header-one-line{{white-space:normal;}}}}
 </style>
 """, unsafe_allow_html=True)
 
 inject_css()
+
+# ============================================================
+# SUPABASE
+# ============================================================
 
 def clean_supabase_url(url):
     if not url:
@@ -98,11 +296,13 @@ def clean_supabase_url(url):
         value = value[:-8]
     return value
 
+
 def get_secret_value(key, default=""):
     try:
         return st.secrets.get(key, default)
     except Exception:
         return os.environ.get(key, default)
+
 
 @st.cache_resource(show_spinner=False)
 def get_supabase_client():
@@ -117,17 +317,69 @@ if supabase is None:
     st.error(t("supabase_error"))
     st.stop()
 
+
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")
+
 
 def s_select(table, columns="*"):
     return supabase.table(table).select(columns)
 
+
 def s_data(response):
     return response.data if hasattr(response, "data") and response.data is not None else []
 
+
 def db_error_message(err):
     return str(err)
+
+# ============================================================
+# AUTH LEGACY
+# ============================================================
+
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = os.urandom(16)
+    if isinstance(salt, str):
+        salt = bytes.fromhex(salt)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120000)
+    return salt.hex(), digest.hex()
+
+
+def verify_password(password, stored_password, stored_salt=None):
+    if stored_salt is None or stored_salt == "":
+        return password == stored_password
+    try:
+        _, digest = hash_password(password, stored_salt)
+        return digest == stored_password
+    except Exception:
+        return False
+
+
+def get_user(username):
+    data = s_data(s_select("usuaris", "username, password, password_salt, language, created_at, last_login").eq("username", username).limit(1).execute())
+    return data[0] if data else None
+
+
+def create_user(username, password, language):
+    if get_user(username):
+        return False
+    salt, digest = hash_password(password)
+    supabase.table("usuaris").insert({"username": username, "password": digest, "password_salt": salt, "language": language, "created_at": now_iso(), "last_login": None}).execute()
+    return True
+
+
+def migrate_plain_password(username, password):
+    salt, digest = hash_password(password)
+    supabase.table("usuaris").update({"password": digest, "password_salt": salt}).eq("username", username).execute()
+
+
+def update_user_login(username):
+    supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
+
+# ============================================================
+# NOTES
+# ============================================================
 
 def unpack_notes(raw):
     if not raw:
@@ -140,48 +392,18 @@ def unpack_notes(raw):
             return "", {}
     return raw, {}
 
+
 def pack_notes(br_notes, tar_notes):
     return NOTES_PREFIX + json.dumps({"br_notes": br_notes or "", "tar_notes": tar_notes or {}}, ensure_ascii=False)
 
-def hash_password(password, salt=None):
-    import hashlib as _hashlib
-    if salt is None:
-        salt = os.urandom(16)
-    if isinstance(salt, str):
-        salt = bytes.fromhex(salt)
-    digest = _hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120000)
-    return salt.hex(), digest.hex()
-
-def verify_password(password, stored_password, stored_salt=None):
-    if stored_salt is None or stored_salt == "":
-        return password == stored_password
-    try:
-        _, digest = hash_password(password, stored_salt)
-        return digest == stored_password
-    except Exception:
-        return False
-
-def get_user(username):
-    data = s_data(s_select("usuaris", "username, password, password_salt, language, created_at, last_login").eq("username", username).limit(1).execute())
-    return data[0] if data else None
-
-def create_user(username, password, language):
-    if get_user(username):
-        return False
-    salt, digest = hash_password(password)
-    supabase.table("usuaris").insert({"username": username, "password": digest, "password_salt": salt, "language": language, "created_at": now_iso(), "last_login": None}).execute()
-    return True
-
-def migrate_plain_password(username, password):
-    salt, digest = hash_password(password)
-    supabase.table("usuaris").update({"password": digest, "password_salt": salt}).eq("username", username).execute()
-
-def update_user_login(username):
-    supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
+# ============================================================
+# MESOS
+# ============================================================
 
 def get_month_key(lang=None):
     now = datetime.now()
     return f"{now.year}-{now.month:02d}"
+
 
 def parse_month_to_canonical(month_text):
     if not month_text:
@@ -199,6 +421,7 @@ def parse_month_to_canonical(month_text):
                     return f"{int(year):04d}-{TRANS[lang]['months'].index(month_name)+1:02d}"
     return value
 
+
 def month_display(month_key, lang=None):
     lang = lang or st.session_state.get("idioma", "ca")
     canonical = parse_month_to_canonical(month_key)
@@ -208,6 +431,7 @@ def month_display(month_key, lang=None):
         if 0 <= idx < 12:
             return f"{TRANS[lang]['months'][idx]} {year}"
     return str(month_key)
+
 
 def month_aliases(month_key):
     canonical = parse_month_to_canonical(month_key)
@@ -220,6 +444,7 @@ def month_aliases(month_key):
             aliases.append(f"{TRANS['es']['months'][idx]} {year}")
     return list(dict.fromkeys(aliases))
 
+
 def next_month(month_text, target_lang=None):
     canonical = parse_month_to_canonical(month_text)
     if not re.match(r"^\d{4}-\d{2}$", canonical):
@@ -231,6 +456,10 @@ def next_month(month_text, target_lang=None):
         return f"{year + 1}-01"
     return f"{year:04d}-{month + 1:02d}"
 
+# ============================================================
+# MICROSOFT PREPARAT PER A FUTUR, NO VISIBLE
+# ============================================================
+
 def st_user_dict():
     try:
         return st.user.to_dict()
@@ -240,6 +469,7 @@ def st_user_dict():
         except Exception:
             return {}
 
+
 def microsoft_user_email():
     user_info = st_user_dict()
     for key in ["email", "preferred_username", "upn", "mail", "unique_name"]:
@@ -247,6 +477,7 @@ def microsoft_user_email():
         if value and "@" in str(value):
             return str(value).strip().lower()
     return ""
+
 
 def microsoft_user_name():
     user_info = st_user_dict()
@@ -256,8 +487,10 @@ def microsoft_user_name():
             return str(value)
     return microsoft_user_email()
 
+
 def is_allowed_email(email):
     return str(email or "").lower().endswith(ALLOWED_EMAIL_DOMAIN)
+
 
 def migrate_existing_user_data(email):
     email = str(email or "").lower().strip()
@@ -272,6 +505,7 @@ def migrate_existing_user_data(email):
                 except Exception:
                     pass
 
+
 def ensure_microsoft_user_profile(email):
     email = str(email or "").lower().strip()
     if not email:
@@ -285,21 +519,22 @@ def ensure_microsoft_user_profile(email):
     except Exception:
         pass
 
+
 def admin_users():
     raw = str(get_secret_value("ADMIN_USERS", "marc.llopis@sorigue.com,xavier.llopis@sorigue.com,marc.llopis,Xavier.llopis"))
     return [x.strip().lower() for x in raw.split(",") if x.strip()]
 
+
 def is_admin_user(username):
     return str(username or "").strip().lower() in admin_users()
+
 
 def list_users():
     return s_data(s_select("usuaris", "username, language, created_at, last_login").order("username").execute())
 
-def login_with_microsoft_button():
-    try:
-        st.login(provider="microsoft")
-    except Exception as e:
-        st.warning(f"{t('ms_not_configured')} ({e})")
+# ============================================================
+# UI HELPERS
+# ============================================================
 
 def progress_color(progress):
     progress = int(progress or 0)
@@ -308,14 +543,16 @@ def progress_color(progress):
     if progress <= 50:
         return WARNING
     if progress <= 75:
-        return "#D9AF00"
+        return PRIMARY
     return SUCCESS
+
 
 def progress_bar(progress, label=None):
     progress = int(progress or 0)
     color = progress_color(progress)
     label_text = label if label else f"{progress}%"
     st.markdown(f"""<div class="s-progress"><div class="s-progress-inner" style="width:{max(progress,4)}%;background:{color};">{label_text}</div></div>""", unsafe_allow_html=True)
+
 
 def status_dot(progress):
     progress = int(progress or 0)
@@ -329,18 +566,54 @@ def status_dot(progress):
         return "🟠"
     return "🔴"
 
+
 def progress_radio_label(value):
     colors = {0: "🔴", 25: "🟠", 50: "🟡", 75: "🔵", 100: "🟢"}
     return f"{colors.get(int(value), '⚪')} {int(value)}%"
 
+
+def progress_preview_html(progress):
+    progress = int(progress or 0)
+    active_segments = progress // 25
+    segments = "".join([f"<span class='segment-box {'segment-on' if i <= active_segments and progress > 0 else ''}'></span>" for i in range(1, 5)])
+    pills = "".join([f"<span class='mini-pill {'mini-pill-active' if value == progress else ''}'>{progress_radio_label(value)}</span>" for value in PROGRESS_OPTIONS])
+    return f"""
+    <div class="progress-preview-grid">
+        <div class="progress-preview">
+            <div class="progress-preview-title">{t('view_buttons')}</div>
+            <div>{progress_radio_label(progress)}</div>
+        </div>
+        <div class="progress-preview">
+            <div class="progress-preview-title">{t('view_segments')}</div>
+            <div class="segment-row">{segments}<strong style="margin-left:6px;font-size:12px;">{progress}%</strong></div>
+        </div>
+        <div class="progress-preview">
+            <div class="progress-preview-title">{t('view_pills')}</div>
+            <div class="pill-row">{pills}</div>
+        </div>
+        <div class="progress-preview">
+            <div class="progress-preview-title">{t('view_bar')}</div>
+            <div class="bar-thin"><div class="bar-thin-inner" style="width:{progress}%;"></div></div>
+            <div style="font-size:12px;font-weight:700;margin-top:4px;">{progress_radio_label(progress)}</div>
+        </div>
+    </div>
+    """
+
+
 def logo_for_login():
     return '<div class="login-logo-text">sorigué</div>'
+
 
 def logo_for_sidebar():
     return '<div class="sidebar-logo-text">sorigué</div>'
 
+
 def kpi_card(label, value):
     st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{label}</div><div class='kpi-value'>{value}</div></div>", unsafe_allow_html=True)
+
+# ============================================================
+# DADES
+# ============================================================
 
 def get_brs(username, month):
     query = s_select("big_rocks", "id, nom, persones, reunions, notes_progres, pregunta, passos").eq("username", username)
@@ -348,16 +621,19 @@ def get_brs(username, month):
     query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
     return s_data(query.order("id").execute())
 
+
 def get_all_tars_for_brs(br_ids):
     if not br_ids:
         return []
     return s_data(s_select("tars", "id, id_br, num, descripcio, progres, estat").in_("id_br", br_ids).eq("estat", "Actiu").order("id").execute())
+
 
 def group_tars_by_br(tars):
     grouped = {}
     for tar in tars:
         grouped.setdefault(tar.get("id_br"), []).append(tar)
     return grouped
+
 
 def get_months(username):
     rows = s_data(s_select("big_rocks", "id, mes").eq("username", username).order("id", desc=True).execute())
@@ -368,20 +644,24 @@ def get_months(username):
             seen.append(mes)
     return seen
 
+
 def month_is_closed(username, month):
     query = s_select("mesos_tancats", "username, mes").eq("username", username)
     aliases = month_aliases(month)
     query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
     return len(s_data(query.limit(1).execute())) > 0
 
+
 def close_month(username, month):
     supabase.table("mesos_tancats").upsert({"username": username, "mes": parse_month_to_canonical(month), "closed_at": now_iso()}).execute()
+
 
 def unlock_month(username, month):
     aliases = month_aliases(month)
     query = supabase.table("mesos_tancats").delete().eq("username", username)
     query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
     query.execute()
+
 
 def stats_from_tars(tars):
     total = len(tars)
@@ -390,6 +670,7 @@ def stats_from_tars(tars):
     pending = sum(1 for tar in tars if int(tar.get("progres") or 0) == 0)
     avg = int(sum(int(tar.get("progres") or 0) for tar in tars) / total) if total else 0
     return {"total": total, "completed": completed, "in_progress": in_progress, "pending": pending, "avg": avg}
+
 
 def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes, pregunta, passos):
     res = supabase.table("big_rocks").insert({"username": username, "mes": parse_month_to_canonical(month), "nom": nom, "persones": persones, "reunions": reunions, "notes_progres": pack_notes(br_notes, {}), "pregunta": pregunta, "passos": passos, "created_at": now_iso(), "updated_at": now_iso()}).execute()
@@ -402,6 +683,7 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
         supabase.table("tars").insert(rows).execute()
     return br_id
 
+
 def save_bigrock_form(br_id, raw_current_notes, br_notes, pregunta, passos, tar_updates, tar_note_updates):
     _, existing_tar_notes = unpack_notes(raw_current_notes)
     for tar_id, note in tar_note_updates.items():
@@ -409,6 +691,10 @@ def save_bigrock_form(br_id, raw_current_notes, br_notes, pregunta, passos, tar_
     supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes, existing_tar_notes), "pregunta": pregunta, "passos": passos, "updated_at": now_iso()}).eq("id", br_id).execute()
     for tar_id, payload in tar_updates.items():
         supabase.table("tars").update({"descripcio": payload.get("descripcio", ""), "progres": int(payload.get("progres", 0)), "updated_at": now_iso()}).eq("id", tar_id).execute()
+
+# ============================================================
+# STATE
+# ============================================================
 
 def remember_language(lang):
     if lang not in LANG_OPTIONS:
@@ -420,6 +706,7 @@ def remember_language(lang):
     except Exception:
         pass
 
+
 def change_language():
     selected = st.session_state.get("idioma_selector", "ca")
     remember_language(selected)
@@ -430,14 +717,17 @@ def change_language():
         except Exception:
             pass
 
+
 def change_login_language():
     remember_language(st.session_state.get("login_lang_selector", "ca"))
+
 
 def toggle_bigrock(br_id):
     current = st.session_state.get("open_br_id")
     current = str(current) if current is not None else None
     target = str(br_id)
     st.session_state.open_br_id = None if current == target else target
+
 
 def initial_language():
     try:
@@ -467,16 +757,19 @@ else:
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 
-# LOGIN HÍBRID
+# ============================================================
+# LOGIN
+# ============================================================
+
 if st.session_state.usuari_actual is None:
     left, center, right = st.columns([1, 1.35, 1])
     with center:
         st.markdown(f"""<div style="background:{PRIMARY};border-radius:10px;padding:36px 38px 34px 38px;margin-top:32px;box-shadow:0 3px 14px rgba(35,35,35,.12);">{logo_for_login()}<div style="color:#FFFFFF;font-size:28px;line-height:34px;font-weight:700;text-align:center;">{t('login_title')}</div><div style="color:#E7F2F7;font-size:14px;line-height:21px;text-align:center;margin-top:8px;">{t('login_subtitle')}</div></div>""", unsafe_allow_html=True)
         st.write("")
         st.selectbox(t("lang_login"), options=["ca", "es"], index=0 if st.session_state.idioma == "ca" else 1, format_func=lang_label, key="login_lang_selector", on_change=change_login_language)
-        # Microsoft Login queda ocult fins que IT habiliti l'App Registration a Entra.
-        # Si en el futur existeix una sessió Microsoft activa, el codi la pot aprofitar sense mostrar el botó.
-        if hasattr(st, "user") and getattr(st.user, "is_logged_in", False):
+
+        # Microsoft queda ocult fins que estigui habilitat, però si hi ha una sessió vàlida ja creada, la respecta.
+        if MICROSOFT_LOGIN_ENABLED and hasattr(st, "user") and getattr(st.user, "is_logged_in", False):
             email = microsoft_user_email()
             if is_allowed_email(email):
                 migrate_existing_user_data(email)
@@ -486,11 +779,12 @@ if st.session_state.usuari_actual is None:
                 st.session_state.pantalla = "dashboard"
                 st.session_state.open_br_id = None
                 st.rerun()
+
         st.subheader(t("legacy_login"))
         tab1, tab2 = st.tabs([t("login_tab"), t("reg_tab")])
         with tab1:
             with st.form("legacy_login_form"):
-                usuari = st.text_input(t("usr"), placeholder="marc.llopis")
+                usuari = st.text_input(t("email_user"), placeholder="usuario@sorigue.com")
                 contrasenya = st.text_input(t("pwd"), type="password")
                 submitted = st.form_submit_button(t("enter"), type="primary", use_container_width=True)
                 if submitted:
@@ -517,7 +811,7 @@ if st.session_state.usuari_actual is None:
                             st.error(db_error_message(e))
         with tab2:
             with st.form("legacy_register_form"):
-                nou_usuari = st.text_input(t("new_usr"), placeholder="nom.cognom@sorigue.com")
+                nou_usuari = st.text_input(t("new_usr"), placeholder="usuario@sorigue.com")
                 nova_contra = st.text_input(t("pwd"), type="password")
                 nou_idioma = st.selectbox(t("lang_reg"), options=["ca", "es"], index=0 if st.session_state.idioma == "ca" else 1, format_func=lang_label)
                 submitted = st.form_submit_button(t("register"), type="primary", use_container_width=True)
@@ -537,6 +831,10 @@ if st.session_state.usuari_actual is None:
                         except Exception as e:
                             st.error(db_error_message(e))
     st.stop()
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 USUARI = st.session_state.usuari_actual
 IS_ADMIN = is_admin_user(USUARI)
@@ -581,11 +879,11 @@ with st.sidebar:
             if key in st.session_state:
                 del st.session_state[key]
         remember_language(last_lang)
-        try:
-            st.logout()
-        except Exception:
-            st.rerun()
         st.rerun()
+
+# ============================================================
+# PANTALLES
+# ============================================================
 
 def render_admin_panel():
     if not IS_ADMIN:
@@ -608,6 +906,7 @@ def render_admin_panel():
     if st.button(t("back")):
         st.session_state.pantalla = "dashboard"
         st.rerun()
+
 
 def render_report(title, allow_close=False):
     st.title(f"{title} · {month_display(MES)}")
@@ -675,6 +974,10 @@ def render_report(title, allow_close=False):
         if st.button(t("back")):
             st.session_state.pantalla = "dashboard"
             st.rerun()
+
+# ============================================================
+# DASHBOARD
+# ============================================================
 
 MES = st.session_state.mes_actual
 es_tancat = month_is_closed(USUARI, MES)
@@ -761,17 +1064,25 @@ else:
                 for tar in tar_list:
                     tar_id = tar["id"]
                     progres = int(tar.get("progres") or 0)
-                    progres = progres if progres in [0, 25, 50, 75, 100] else 0
+                    progres = progres if progres in PROGRESS_OPTIONS else 0
                     desc_key = f"desc_{tar_id}"
                     prog_key = f"prog_{tar_id}"
+                    edit_key = f"edit_{tar_id}"
                     note_key = f"tar_note_{tar_id}"
-                    current_progress = st.session_state.get(prog_key, progres)
+                    current_progress = int(st.session_state.get(prog_key, progres))
                     displayed_desc = st.session_state.get(desc_key, tar.get("descripcio") or "")
+                    if not displayed_desc.strip():
+                        displayed_desc = tar.get("num") or "TAR"
                     st.markdown("<div class='tar-edit-card'>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='tar-title-line'><div class='tar-title-text'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div><div class='tar-header-progress'>{status_dot(current_progress)} {current_progress}%</div></div>", unsafe_allow_html=True)
-                    with st.expander(t("edit_title"), expanded=False):
-                        st.text_input(f"{tar.get('num') or ''}", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
-                    st.radio(t("state"), options=[0, 25, 50, 75, 100], format_func=progress_radio_label, index=[0, 25, 50, 75, 100].index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
+                    c_title, c_edit = st.columns([11, 1])
+                    with c_title:
+                        st.markdown(f"<div class='tar-header-one-line'><div class='tar-title-inline'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div><div class='tar-right-inline'>{status_dot(current_progress)} {current_progress}%</div></div>", unsafe_allow_html=True)
+                    with c_edit:
+                        st.checkbox("✏️", key=edit_key, disabled=es_tancat, label_visibility="visible")
+                    if st.session_state.get(edit_key):
+                        st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
+                    st.radio(t("state"), options=PROGRESS_OPTIONS, format_func=progress_radio_label, index=PROGRESS_OPTIONS.index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
+                    st.markdown(progress_preview_html(st.session_state.get(prog_key, current_progress)), unsafe_allow_html=True)
                     with st.expander(t("tar_notes"), expanded=False):
                         st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
                     st.markdown("</div>", unsafe_allow_html=True)
