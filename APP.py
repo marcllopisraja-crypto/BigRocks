@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V29
+# BIG ROCKS - SORIGUE | APP.py V30
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# Opció B segments + TAR dins targeta + edició amb llapis
+# Opció B segments + CSS corregit + edició robusta amb llapis
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -278,14 +278,14 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 .empty-icon{{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
 .streamlit-expanderHeader,[data-testid="stExpander"] summary{{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
 
-.progress-segments-only{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}
-.segment-row-large .segment-box{height:10px;}
-.segment-percent{margin-left:8px;font-size:13px;color:var(--s-text);white-space:nowrap;}
-.tar-card-inner{width:100%;}
-.pencil-expander [data-testid="stExpander"] summary{min-height:30px!important;}
+.progress-segments-only{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}}
+.segment-row-large .segment-box{{height:10px;}}
+.segment-percent{{margin-left:8px;font-size:13px;color:var(--s-text);white-space:nowrap;}}
+.tar-card-inner{{width:100%;}}
+.pencil-expander [data-testid="stExpander"] summary{{min-height:30px!important;}}
 
-@media(max-width:900px){{.progress-preview-grid{{grid-template-columns:1fr 1fr;}}}}
-@media(max-width:620px){{.progress-preview-grid{{grid-template-columns:1fr;}}.tar-header-one-line{{white-space:normal;}}}}
+@media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
+@media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1074,8 +1074,13 @@ else:
                         with c_progress:
                             st.markdown(f"<div class='tar-right-inline'>{status_dot(current_progress)} {current_progress}%</div>", unsafe_allow_html=True)
                         with c_edit:
-                            with st.expander("✏️", expanded=False):
-                                st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
+                            # Botó d'edició robust: popover si la versió de Streamlit ho suporta; fallback a expander.
+                            if hasattr(st, "popover"):
+                                with st.popover("✏️"):
+                                    st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
+                            else:
+                                with st.expander("✏️", expanded=False):
+                                    st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
                         st.radio(t("state"), options=PROGRESS_OPTIONS, format_func=progress_radio_label, index=PROGRESS_OPTIONS.index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
                         st.markdown(progress_preview_html(st.session_state.get(prog_key, current_progress)), unsafe_allow_html=True)
                         with st.expander(t("tar_notes"), expanded=False):
