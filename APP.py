@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V31
+# BIG ROCKS - SORIGUE | APP.py V32
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# Auto-save + segments blaus únics + TAR amb barra lateral corporativa
+# CSS escapades + auto-save + segments blaus únics
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -287,23 +287,24 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 @media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
 @media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
 
-.tar-layout-v31{width:100%;}
-.tar-left-blue{width:6px;background:var(--s-primary);border-radius:999px;min-height:78px;margin-top:2px;}
-.tar-title-row-v31{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:6px;}
-.tar-title-v31{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tar-edit-btn-v31 button{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:#FFFFFF!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}
-.tar-edit-btn-v31 button:hover{background:#F0F8FC!important;color:var(--s-primary-dark)!important;border-color:var(--s-primary)!important;}
-.segment-choice-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:8px 0 4px 0;}
-.segment-choice{height:10px;border-radius:999px;background:#D9E3E8;}
-.segment-choice.active{background:var(--s-primary);}
-.segment-choice-labels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;align-items:center;margin-bottom:8px;}
-.segment-choice-label{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}
-.segment-choice-label.active{color:var(--s-primary-dark);}
-.segment-click-buttons div[data-testid="stButton"] button{height:24px!important;min-height:24px!important;padding:0!important;font-size:11px!important;background:#F7FBFD!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}
-.segment-click-buttons div[data-testid="stButton"] button:hover{background:var(--s-primary)!important;color:#FFFFFF!important;border-color:var(--s-primary)!important;}
-.segment-status-v31{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}
-.auto-save-caption{font-size:11px;color:var(--s-grey);margin-top:-2px;margin-bottom:4px;}
-
+.tar-layout-v31{{width:100%;}}
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:78px;margin-top:2px;}}
+.tar-title-row-v31{{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:6px;}}
+.tar-title-v31{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+.tar-edit-btn-v31 button{{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:#FFFFFF!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}}
+.tar-edit-btn-v31 button:hover{{background:#F0F8FC!important;color:var(--s-primary-dark)!important;border-color:var(--s-primary)!important;}}
+.segment-choice-row{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:8px 0 4px 0;}}
+.segment-choice{{height:10px;border-radius:999px;background:#D9E3E8;}}
+.segment-choice.active{{background:var(--s-primary);}}
+.segment-choice-labels{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;align-items:center;margin-bottom:8px;}}
+.segment-choice-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
+.segment-choice-label.active{{color:var(--s-primary-dark);}}
+.segment-click-buttons div[data-testid="stButton"] button{{height:24px!important;min-height:24px!important;padding:0!important;font-size:11px!important;background:#F7FBFD!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}}
+.segment-click-buttons div[data-testid="stButton"] button:hover{{background:var(--s-primary)!important;color:#FFFFFF!important;border-color:var(--s-primary)!important;}}
+.segment-status-v31{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
+.auto-save-caption{{font-size:11px;color:var(--s-grey);margin-top:-2px;margin-bottom:4px;}}
+@media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
+@media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
 </style>
 """, unsafe_allow_html=True)
 
