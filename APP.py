@@ -11,8 +11,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V37
-# Fons corporatiu + select_slider alineat + autosave + informe agrupat per Big Rock
+# BIG ROCKS - SORIGUE | APP.py V38
+# Tancament crea mes següent + desbloqueig per a tothom + informe agrupat
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -63,7 +63,7 @@ TRANS = {
         "status_closed": "Tancat",
         "open_month": "Mes obert i editable",
         "closed_month": "Aquest mes està tancat.",
-        "unlock": "Desbloquejar mes",
+        "unlock": "🔓 Reobrir mes",
         "logout": "Tancar sessió",
         "eval_close": "Avaluar i tancar mes",
         "eval_no_close": "Avaluar sense tancar",
@@ -140,7 +140,7 @@ TRANS = {
         "status_closed": "Cerrado",
         "open_month": "Mes abierto y editable",
         "closed_month": "Este mes está cerrado.",
-        "unlock": "Desbloquear mes",
+        "unlock": "🔓 Reabrir mes",
         "logout": "Cerrar sesión",
         "eval_close": "Evaluar y cerrar mes",
         "eval_no_close": "Evaluar sin cerrar",
@@ -591,6 +591,84 @@ def unlock_month(username, month):
     query.execute()
 
 
+def get_existing_br_in_month(username, month, br_name):
+    aliases = month_aliases(month)
+    query = s_select("big_rocks", "id, nom, notes_progres").eq("username", username).eq("nom", br_name)
+    query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
+    data = s_data(query.limit(1).execute())
+    return data[0] if data else None
+
+
+def create_next_month_from_pending(username, month):
+    """Tanca el mes actual i crea el mes següent amb les Big Rocks que tenen TARs no completades.
+    Si el mes següent ja existeix, evita duplicar Big Rocks i TARs amb la mateixa descripció.
+    """
+    source_month = parse_month_to_canonical(month)
+    target_month = next_month(source_month)
+    brs = get_brs(username, source_month)
+    tars = get_all_tars_for_brs([br["id"] for br in brs])
+    tars_by_br = group_tars_by_br(tars)
+    created_brs = 0
+    created_tars = 0
+
+    for br in brs:
+        pending_tars = [tar for tar in tars_by_br.get(br["id"], []) if int(tar.get("progres") or 0) < 100]
+        if not pending_tars:
+            continue
+
+        br_notes, _ = unpack_notes(br.get("notes_progres"))
+        existing = get_existing_br_in_month(username, target_month, br.get("nom") or "")
+        if existing:
+            new_br_id = existing["id"]
+            existing_tars = get_all_tars_for_brs([new_br_id])
+            existing_descs = {str(tar.get("descripcio") or "").strip().lower() for tar in existing_tars}
+        else:
+            res = supabase.table("big_rocks").insert({
+                "username": username,
+                "mes": target_month,
+                "nom": br.get("nom") or "",
+                "persones": br.get("persones") or "",
+                "reunions": br.get("reunions") or "",
+                "notes_progres": pack_notes(br_notes, {}),
+                "pregunta": br.get("pregunta") or "",
+                "passos": br.get("passos") or "",
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            }).execute()
+            data = s_data(res)
+            if not data:
+                continue
+            new_br_id = data[0]["id"]
+            existing_descs = set()
+            created_brs += 1
+
+        rows = []
+        for idx, tar in enumerate(pending_tars, start=1):
+            desc = str(tar.get("descripcio") or "").strip()
+            if desc.lower() in existing_descs:
+                continue
+            rows.append({
+                "id_br": new_br_id,
+                "num": tar.get("num") or f"TAR {idx}",
+                "descripcio": desc,
+                "progres": int(tar.get("progres") or 0),
+                "estat": "Actiu",
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            })
+        if rows:
+            supabase.table("tars").insert(rows).execute()
+            created_tars += len(rows)
+
+    return target_month, created_brs, created_tars
+
+
+def close_month_and_open_next(username, month):
+    close_month(username, month)
+    target_month, created_brs, created_tars = create_next_month_from_pending(username, month)
+    return target_month, created_brs, created_tars
+
+
 def stats_from_tars(tars):
     total = len(tars)
     completed = sum(1 for tar in tars if int(tar.get("progres") or 0) == 100)
@@ -818,11 +896,11 @@ with st.sidebar:
     st.selectbox(t("lang"), ["ca", "es"], index=0 if st.session_state.idioma == "ca" else 1, format_func=lang_label, key="idioma_selector", on_change=change_language)
     mesos_disponibles = get_months(USUARI)
     mes_ini = get_month_key(st.session_state.idioma)
-    if mes_ini not in mesos_disponibles:
-        mesos_disponibles.insert(0, mes_ini)
     st.session_state.mes_actual = parse_month_to_canonical(st.session_state.mes_actual)
     if st.session_state.mes_actual not in mesos_disponibles:
-        st.session_state.mes_actual = mes_ini
+        mesos_disponibles.insert(0, st.session_state.mes_actual)
+    if mes_ini not in mesos_disponibles:
+        mesos_disponibles.insert(0, mes_ini)
     mes_seleccionat = st.selectbox(t("nav_months"), mesos_disponibles, index=mesos_disponibles.index(st.session_state.mes_actual), key="mes_selector", format_func=lambda x: month_display(x, st.session_state.idioma))
     mes_seleccionat = parse_month_to_canonical(mes_seleccionat)
     if mes_seleccionat != st.session_state.mes_actual:
@@ -899,8 +977,11 @@ def render_report(title, allow_close=False):
         st.markdown("</div>", unsafe_allow_html=True)
     if allow_close and not es_tancat:
         if st.button(t("confirm_close"), type="primary", use_container_width=True):
-            close_month(USUARI, MES)
+            target_month, created_brs, created_tars = close_month_and_open_next(USUARI, MES)
+            st.session_state.mes_actual = target_month
             st.session_state.pantalla = "dashboard"
+            st.session_state.open_br_id = None
+            st.success(f"Mes tancat. S'ha obert {month_display(target_month)} amb {created_brs} Big Rocks i {created_tars} TARs pendents.")
             st.rerun()
     if st.button(t("back")):
         st.session_state.pantalla = "dashboard"
