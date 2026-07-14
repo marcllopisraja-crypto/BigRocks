@@ -1,5 +1,4 @@
 
-import base64
 import hashlib
 import html
 import json
@@ -12,15 +11,12 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V35
-# Login net amb correu @sorigue.com + TARs en una sola línia
-# Barra visual amb segments clicables natius + auto-save
+# BIG ROCKS - SORIGUE | APP.py V36
+# Fons blau corporatiu subtil + barra global/TAR clicable amb slider + auto-save
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
 ALLOWED_EMAIL_DOMAIN = "@sorigue.com"
-MICROSOFT_LOGIN_ENABLED = False  # ocult fins que IT habiliti Entra App Registration
-
 PRIMARY = "#009CDE"
 PRIMARY_DARK = "#216D8C"
 PRIMARY_HOVER = "#43B8ED"
@@ -30,9 +26,8 @@ SUCCESS = "#03A446"
 WARNING = "#D9AF00"
 ERROR = "#E53A4F"
 LIGHT_BLUE = "#E7F2F7"
-
-LANG_OPTIONS = {"ca": "🇦🇩 Català", "es": "🇪🇸 Español"}
 PROGRESS_OPTIONS = [0, 25, 50, 75, 100]
+LANG_OPTIONS = {"ca": "🇦🇩 Català", "es": "🇪🇸 Español"}
 
 USER_EMAIL_MIGRATION = {
     "marc.llopis@sorigue.com": ["marc.llopis", "Marc.llopis", "marc llopis", "Marc Llopis", "marc"],
@@ -48,7 +43,6 @@ TRANS = {
         "legacy_login": "Accés amb usuari i contrasenya",
         "login_tab": "Iniciar sessió",
         "reg_tab": "Registrar usuari",
-        "usr": "Usuari",
         "email_user": "Correu corporatiu",
         "pwd": "Contrasenya",
         "new_usr": "Correu corporatiu",
@@ -88,11 +82,10 @@ TRANS = {
         "prog": "Detalls de progrés",
         "need": "Pregunta o necessitat",
         "next_steps": "Pròxims passos",
-        "state": "Estat",
+        "state": "Compliment",
         "desc": "Descripció de la tasca",
         "tar_notes": "Anotacions de la TAR",
         "tar_notes_placeholder": "Escriu observacions, acords, incidències o seguiment específic d'aquesta TAR...",
-        "save_full_br": "Guardar Big Rock",
         "create_br": "Crear nova Big Rock",
         "config_br": "Configura la teva nova Big Rock",
         "title_br": "Títol de la Big Rock",
@@ -101,7 +94,7 @@ TRANS = {
         "meetings_placeholder": "Ex. Seguiment setmanal, comitè mensual...",
         "tar_placeholder": "Descriu una acció concreta i mesurable",
         "save": "Guardar Big Rock",
-        "saved": "Canvis guardats correctament.",
+        "saved": "Canvis guardats automàticament.",
         "summary": "Resum de tancament",
         "report_title": "Informe de seguiment",
         "global_comp": "Grau de compliment global",
@@ -117,11 +110,6 @@ TRANS = {
         "admin_no_users": "No s'han trobat usuaris.",
         "force_migration": "Forçar migració usuaris antics",
         "migration_ok": "Migració executada.",
-        "progress_views": "Vistes de compliment",
-        "view_buttons": "Opció A · Botons",
-        "view_segments": "Opció B · Segments",
-        "view_pills": "Opció C · Pastilles",
-        "view_bar": "Opció D · Barra fina",
         "supabase_error": "No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets.",
         "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
@@ -131,7 +119,6 @@ TRANS = {
         "legacy_login": "Acceso con usuario y contraseña",
         "login_tab": "Iniciar sesión",
         "reg_tab": "Registrar usuario",
-        "usr": "Usuario",
         "email_user": "Correo corporativo",
         "pwd": "Contraseña",
         "new_usr": "Correo corporativo",
@@ -171,11 +158,10 @@ TRANS = {
         "prog": "Detalles de progreso",
         "need": "Pregunta o necesidad",
         "next_steps": "Próximos pasos",
-        "state": "Estado",
+        "state": "Cumplimiento",
         "desc": "Descripción de la tarea",
         "tar_notes": "Anotaciones de la TAR",
         "tar_notes_placeholder": "Escribe observaciones, acuerdos, incidencias o seguimiento específico de esta TAR...",
-        "save_full_br": "Guardar Big Rock",
         "create_br": "Crear nueva Big Rock",
         "config_br": "Configura tu nueva Big Rock",
         "title_br": "Título de la Big Rock",
@@ -184,7 +170,7 @@ TRANS = {
         "meetings_placeholder": "Ej. Seguimiento semanal, comité mensual...",
         "tar_placeholder": "Describe una acción concreta y medible",
         "save": "Guardar Big Rock",
-        "saved": "Cambios guardados correctamente.",
+        "saved": "Cambios guardados automáticamente.",
         "summary": "Resumen de cierre",
         "report_title": "Informe de seguimiento",
         "global_comp": "Grado de cumplimiento global",
@@ -200,11 +186,6 @@ TRANS = {
         "admin_no_users": "No se han encontrado usuarios.",
         "force_migration": "Forzar migración usuarios antiguos",
         "migration_ok": "Migración ejecutada.",
-        "progress_views": "Vistas de cumplimiento",
-        "view_buttons": "Opción A · Botones",
-        "view_segments": "Opción B · Segmentos",
-        "view_pills": "Opción C · Pastillas",
-        "view_bar": "Opción D · Barra fina",
         "supabase_error": "No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets.",
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
@@ -227,115 +208,62 @@ def inject_css():
     st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
-:root{{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-success:{SUCCESS};--s-warning:{WARNING};--s-error:{ERROR};--s-light-blue:{LIGHT_BLUE};}}
-html,body,input,textarea,button,select{{font-family:'Montserrat',Arial,sans-serif!important;}}
-p,label,h1,h2,h3,h4,h5,h6,[data-testid="stMarkdownContainer"],[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-baseweb="select"] div,[data-baseweb="select"] span{{font-family:'Montserrat',Arial,sans-serif!important;}}
-.block-container{{padding-top:1.8rem;padding-bottom:3rem;max-width:1360px;}}
-h1{{font-size:42px!important;line-height:50px!important;font-weight:700!important;color:var(--s-text)!important;}}
-h2{{font-size:28px!important;line-height:34px!important;font-weight:700!important;color:var(--s-text)!important;}}
-.login-logo-text{{color:#fff;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
-[data-testid="stSidebar"]{{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%)!important;}}
-[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] .sidebar-white{{color:#fff!important;}}
-[data-testid="stSidebar"] label{{font-weight:700!important;}}
-.sidebar-logo-text{{color:#fff;font-size:48px;font-weight:700;text-align:center;margin:20px 0 8px 0;}}
-.sidebar-app-title{{color:#fff;font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}}
-.sidebar-app-subtitle{{color:rgba(255,255,255,.88);font-size:13px;text-align:center;margin-bottom:22px;}}
-.sidebar-status-card{{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.38);border-radius:8px;padding:14px 16px;margin:14px 0 18px 0;}}
-.sidebar-pill{{display:inline-flex;border-radius:999px;padding:7px 13px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:700;}}
-[data-baseweb="select"] > div{{background:#fff!important;border:1px solid #BBBBBB!important;border-radius:4px!important;min-height:40px!important;}}
-[data-baseweb="select"] span,[data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] span,[data-testid="stSidebar"] [data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] input{{color:var(--s-text)!important;}}
-[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea{{border-radius:4px!important;border:1px solid #BBBBBB!important;color:var(--s-text)!important;background:#fff!important;min-height:40px!important;}}
-.stButton>button,[data-testid="stFormSubmitButton"] button{{border-radius:4px!important;min-height:38px!important;font-weight:700!important;border:1px solid var(--s-primary)!important;background:var(--s-primary)!important;color:#fff!important;}}
-.stButton>button:hover,[data-testid="stFormSubmitButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#fff!important;}}
-[data-testid="stSidebar"] .stButton>button{{background:rgba(255,255,255,.10)!important;border:1px solid rgba(255,255,255,.48)!important;color:#fff!important;}}
-.open-card-button button{{text-align:left!important;background:#fff!important;color:var(--s-text)!important;border:1px solid #EEF2F4!important;border-left:6px solid var(--s-primary)!important;border-radius:8px!important;box-shadow:0 2px 9px rgba(35,35,35,.08)!important;padding:14px 18px!important;height:auto!important;min-height:86px!important;}}
-.open-card-button button:hover{{background:#F7FBFD!important;border-color:#C6E0EC!important;color:var(--s-text)!important;}}
-.info-card,.tar-edit-card{{background:#fff;border-radius:8px;padding:12px 14px;margin:10px 0 12px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
-.info-card-meta{{color:var(--s-grey);font-size:13px;}}
-.tar-header-one-line{{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;white-space:nowrap;}}
-.tar-title-inline{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}}
-.tar-right-inline{{display:flex;align-items:center;gap:10px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--s-text);}}
-.tar-pencil{{font-size:16px;color:var(--s-primary-dark);}}
-.progress-preview-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:8px 0 2px 0;}}
-.progress-preview{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;min-height:58px;}}
-.progress-preview-title{{font-size:11px;font-weight:700;color:var(--s-grey);margin-bottom:6px;}}
-.segment-row{{display:flex;gap:3px;align-items:center;}}
-.segment-box{{height:9px;flex:1;border-radius:999px;background:#D9E3E8;}}
-.segment-on{{background:var(--s-primary);}}
-.pill-row{{display:flex;gap:4px;flex-wrap:wrap;}}
-.mini-pill{{font-size:11px;border-radius:999px;padding:3px 6px;background:#E8EEF2;color:#53565A;font-weight:700;}}
-.mini-pill-active{{background:var(--s-primary);color:#fff;}}
-.bar-thin{{height:8px;border-radius:999px;background:#E0E2E3;overflow:hidden;}}
-.bar-thin-inner{{height:100%;border-radius:999px;background:var(--s-primary);}}
-.kpi-card{{background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
-.kpi-label{{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;}}
-.kpi-value{{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
-.s-progress{{width:100%;background:#E0E2E3;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
-.s-progress-inner{{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;min-width:38px;}}
-.help-box{{background:var(--s-light-blue);border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
-.help-box-title{{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
-.empty-state{{background:#fff;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
-.empty-icon{{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
-.streamlit-expanderHeader,[data-testid="stExpander"] summary{{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
-
-.progress-segments-only{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}}
-.segment-row-large .segment-box{{height:10px;}}
-.segment-percent{{margin-left:8px;font-size:13px;color:var(--s-text);white-space:nowrap;}}
-.tar-card-inner{{width:100%;}}
-.pencil-expander [data-testid="stExpander"] summary{{min-height:30px!important;}}
-
-@media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
-@media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
-
-.tar-layout-v31{{width:100%;}}
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
-.tar-title-row-v31{{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:6px;}}
-.tar-title-v31{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
-.tar-edit-btn-v31 button{{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:#FFFFFF!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}}
-.tar-edit-btn-v31 button:hover{{background:#F0F8FC!important;color:var(--s-primary-dark)!important;border-color:var(--s-primary)!important;}}
-.segment-choice-row{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:8px 0 4px 0;}}
-.segment-choice{{height:10px;border-radius:999px;background:#D9E3E8;}}
-.segment-choice.active{{background:var(--s-primary);}}
-.segment-choice-labels{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;align-items:center;margin-bottom:8px;}}
-.segment-choice-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
-.segment-choice-label.active{{color:var(--s-primary-dark);}}
-.segment-click-buttons div[data-testid="stButton"] button{{height:24px!important;min-height:24px!important;padding:0!important;font-size:11px!important;background:#F7FBFD!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}}
-.segment-click-buttons div[data-testid="stButton"] button:hover{{background:var(--s-primary)!important;color:#FFFFFF!important;border-color:var(--s-primary)!important;}}
-.segment-status-v31{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
-.auto-save-caption{{font-size:11px;color:var(--s-grey);margin-top:-2px;margin-bottom:4px;}}
-@media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
-@media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
-
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
-.segment-click-bar div[data-testid="stButton"] button{{height:30px!important;min-height:30px!important;padding:0!important;font-size:11px!important;font-weight:700!important;border-radius:999px!important;background:#D9E3E8!important;color:var(--s-primary-dark)!important;border:1px solid #D9E3E8!important;}}
-.segment-click-bar div[data-testid="stButton"] button:hover{{background:var(--s-primary)!important;border-color:var(--s-primary)!important;color:#FFFFFF!important;}}
-.segment-click-bar-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;padding-top:5px;}}
-.segment-click-help{{font-size:11px;color:var(--s-grey);margin-top:2px;}}
-
-
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
-.clickable-segment-bar{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;align-items:center;margin:8px 0 4px 0;}}
-.clickable-segment-bar a{{display:block;height:11px;border-radius:999px;background:#D9E3E8;text-decoration:none;border:1px solid #D9E3E8;}}
-.clickable-segment-bar a.active{{background:var(--s-primary);border-color:var(--s-primary);}}
-.clickable-segment-bar a:hover{{background:var(--s-primary-hover);border-color:var(--s-primary-hover);}}
-.clickable-segment-card{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}}
-.clickable-segment-bottom{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 0.55fr;gap:4px;align-items:center;}}
-.clickable-segment-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
-.clickable-segment-label.active{{color:var(--s-primary-dark);}}
-.clickable-segment-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
-
-
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
-.native-seg-card{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}}
-.native-seg-label-grid{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 0.55fr;gap:4px;align-items:center;margin-top:2px;}}
-.native-seg-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
-.native-seg-label.active{{color:var(--s-primary-dark);}}
-.native-seg-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
-.native-seg-active div[data-testid="stButton"] button{{height:12px!important;min-height:12px!important;padding:0!important;border-radius:999px!important;background:var(--s-primary)!important;border:1px solid var(--s-primary)!important;color:transparent!important;font-size:0!important;line-height:0!important;}}
-.native-seg-active div[data-testid="stButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:transparent!important;}}
-.native-seg-inactive div[data-testid="stButton"] button{{height:12px!important;min-height:12px!important;padding:0!important;border-radius:999px!important;background:#D9E3E8!important;border:1px solid #D9E3E8!important;color:transparent!important;font-size:0!important;line-height:0!important;}}
-.native-seg-inactive div[data-testid="stButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:transparent!important;}}
-
+:root {{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-success:{SUCCESS};--s-warning:{WARNING};--s-error:{ERROR};--s-light-blue:{LIGHT_BLUE};}}
+html, body, input, textarea, button, select {{font-family:'Montserrat',Arial,sans-serif!important;}}
+.stApp {{
+    background-color:#F6FAFC;
+    background-image:
+      linear-gradient(180deg, rgba(246,250,252,.98) 0%, rgba(238,246,250,.98) 100%),
+      radial-gradient(circle at 10% 20%, rgba(0,156,222,.075) 0 1px, transparent 1px),
+      linear-gradient(90deg, rgba(33,109,140,.055) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(33,109,140,.045) 1px, transparent 1px);
+    background-size: auto, 36px 36px, 72px 72px, 72px 72px;
+}}
+.block-container {{padding-top:1.8rem;padding-bottom:3rem;max-width:1360px;}}
+h1 {{font-size:42px!important;line-height:50px!important;font-weight:700!important;color:var(--s-text)!important;}}
+h2 {{font-size:28px!important;line-height:34px!important;font-weight:700!important;color:var(--s-text)!important;}}
+.login-logo-text {{color:#FFFFFF;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
+[data-testid="stSidebar"] {{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%)!important;}}
+[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] .sidebar-white {{color:#FFFFFF!important;}}
+.sidebar-logo-text {{color:#FFFFFF;font-size:48px;font-weight:700;text-align:center;margin:20px 0 8px 0;}}
+.sidebar-app-title {{color:#FFFFFF;font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}}
+.sidebar-app-subtitle {{color:rgba(255,255,255,.88);font-size:13px;text-align:center;margin-bottom:22px;}}
+.sidebar-status-card {{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.38);border-radius:8px;padding:14px 16px;margin:14px 0 18px 0;}}
+.sidebar-pill {{display:inline-flex;border-radius:999px;padding:7px 13px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:#FFFFFF;font-size:13px;font-weight:700;}}
+[data-baseweb="select"] > div {{background:#FFFFFF!important;border:1px solid #BBBBBB!important;border-radius:4px!important;min-height:40px!important;}}
+[data-baseweb="select"] span,[data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] span,[data-testid="stSidebar"] [data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] input {{color:var(--s-text)!important;}}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea {{border-radius:4px!important;border:1px solid #BBBBBB!important;color:var(--s-text)!important;background:#FFFFFF!important;min-height:40px!important;}}
+.stButton>button,[data-testid="stFormSubmitButton"] button {{border-radius:4px!important;min-height:38px!important;font-weight:700!important;border:1px solid var(--s-primary)!important;background:var(--s-primary)!important;color:#FFFFFF!important;}}
+.stButton>button:hover,[data-testid="stFormSubmitButton"] button:hover {{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#FFFFFF!important;}}
+[data-testid="stSidebar"] .stButton>button {{background:rgba(255,255,255,.10)!important;border:1px solid rgba(255,255,255,.48)!important;color:#FFFFFF!important;}}
+.open-card-button button {{text-align:left!important;background:var(--s-primary)!important;color:#FFFFFF!important;border:1px solid var(--s-primary)!important;border-radius:4px!important;box-shadow:0 2px 8px rgba(0,156,222,.18)!important;padding:10px 16px!important;height:auto!important;min-height:42px!important;}}
+.open-card-button button:hover {{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#FFFFFF!important;}}
+.info-card {{background:#FFFFFF;border-radius:8px;padding:14px 16px;margin:12px 0 16px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
+.info-card-meta {{color:var(--s-grey);font-size:13px;}}
+.tar-title-v36 {{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+.tar-left-blue-v36 {{width:6px;background:var(--s-primary);border-radius:999px;min-height:178px;height:100%;margin-top:0;}}
+.tar-edit-btn-v36 button {{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:var(--s-primary)!important;color:#FFFFFF!important;border:1px solid var(--s-primary)!important;}}
+.tar-edit-btn-v36 button:hover {{background:var(--s-primary-hover)!important;color:#FFFFFF!important;border-color:var(--s-primary-hover)!important;}}
+.s-progress {{width:100%;background:#D9E3E8;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
+.s-progress-inner {{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#FFFFFF;min-width:38px;background:var(--s-primary)!important;}}
+.tar-slider-card {{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:12px 14px;margin:10px 0 10px 0;}}
+.tar-slider-card [data-testid="stSlider"] {{padding-top:0!important;}}
+.tar-slider-card [data-testid="stSlider"] div[data-baseweb="slider"] > div {{background:#D9E3E8!important;height:16px!important;border-radius:999px!important;}}
+.tar-slider-card [data-testid="stSlider"] div[data-baseweb="slider"] div[role="slider"] {{background:var(--s-primary)!important;border:3px solid #FFFFFF!important;box-shadow:0 1px 4px rgba(0,0,0,.20)!important;width:22px!important;height:22px!important;}}
+.tar-slider-card [data-testid="stSlider"] div[data-baseweb="slider"] div[style*="background"] {{background:var(--s-primary)!important;}}
+.tar-slider-label-row {{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 0.65fr;gap:4px;align-items:center;margin-top:-8px;}}
+.tar-slider-label {{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
+.tar-slider-label.active {{color:var(--s-primary-dark);}}
+.tar-slider-status {{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
+.kpi-card {{background:#FFFFFF;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
+.kpi-label {{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;}}
+.kpi-value {{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
+.help-box {{background:var(--s-light-blue);border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
+.help-box-title {{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
+.empty-state {{background:#FFFFFF;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
+.empty-icon {{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
+.streamlit-expanderHeader,[data-testid="stExpander"] summary {{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
+@media(max-width:620px) {{.tar-title-v36{{white-space:normal;}}}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -594,21 +522,13 @@ def list_users():
 # ============================================================
 
 def progress_color(progress):
-    progress = int(progress or 0)
-    if progress <= 25:
-        return ERROR
-    if progress <= 50:
-        return WARNING
-    if progress <= 75:
-        return PRIMARY
-    return SUCCESS
+    return PRIMARY
 
 
 def progress_bar(progress, label=None):
     progress = int(progress or 0)
-    color = progress_color(progress)
     label_text = label if label else f"{progress}%"
-    st.markdown(f"""<div class="s-progress"><div class="s-progress-inner" style="width:{max(progress,4)}%;background:{color};">{label_text}</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="s-progress"><div class="s-progress-inner" style="width:{max(progress,4)}%;">{label_text}</div></div>""", unsafe_allow_html=True)
 
 
 def status_dot(progress):
@@ -622,25 +542,6 @@ def status_dot(progress):
     if progress >= 25:
         return "🟠"
     return "🔴"
-
-
-def progress_radio_label(value):
-    colors = {0: "🔴", 25: "🟠", 50: "🟡", 75: "🔵", 100: "🟢"}
-    return f"{colors.get(int(value), '⚪')} {int(value)}%"
-
-
-def progress_preview_html(progress):
-    progress = int(progress or 0)
-    active_segments = progress // 25
-    segments = "".join([
-        f"<span class='segment-box {'segment-on' if i <= active_segments and progress > 0 else ''}'></span>"
-        for i in range(1, 5)
-    ])
-    return f"""
-    <div class="progress-segments-only">
-        <div class="segment-row segment-row-large">{segments}<strong class="segment-percent">{status_dot(progress)} {progress}%</strong></div>
-    </div>
-    """
 
 
 def logo_for_login():
@@ -726,26 +627,16 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
         supabase.table("tars").insert(rows).execute()
     return br_id
 
-
-def save_bigrock_form(br_id, raw_current_notes, br_notes, pregunta, passos, tar_updates, tar_note_updates):
-    _, existing_tar_notes = unpack_notes(raw_current_notes)
-    for tar_id, note in tar_note_updates.items():
-        existing_tar_notes[str(tar_id)] = note or ""
-    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes, existing_tar_notes), "pregunta": pregunta, "passos": passos, "updated_at": now_iso()}).eq("id", br_id).execute()
-    for tar_id, payload in tar_updates.items():
-        supabase.table("tars").update({"descripcio": payload.get("descripcio", ""), "progres": int(payload.get("progres", 0)), "updated_at": now_iso()}).eq("id", tar_id).execute()
+# ============================================================
+# AUTOSAVE
+# ============================================================
 
 def auto_save_br_fields(br_id, raw_current_notes, notes_key, preg_key, passos_key):
     br_notes_value = st.session_state.get(notes_key, "")
     pregunta_value = st.session_state.get(preg_key, "")
     passos_value = st.session_state.get(passos_key, "")
     _, existing_tar_notes = unpack_notes(raw_current_notes)
-    supabase.table("big_rocks").update({
-        "notes_progres": pack_notes(br_notes_value, existing_tar_notes),
-        "pregunta": pregunta_value,
-        "passos": passos_value,
-        "updated_at": now_iso(),
-    }).eq("id", br_id).execute()
+    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes), "pregunta": pregunta_value, "passos": passos_value, "updated_at": now_iso()}).eq("id", br_id).execute()
 
 
 def auto_save_tar(tar_id, desc_key=None, progress_value=None):
@@ -757,8 +648,8 @@ def auto_save_tar(tar_id, desc_key=None, progress_value=None):
     supabase.table("tars").update(payload).eq("id", tar_id).execute()
 
 
-def set_tar_progress(tar_id, prog_key, value):
-    st.session_state[prog_key] = int(value)
+def auto_save_tar_from_slider(tar_id, prog_key):
+    value = int(st.session_state.get(prog_key, 0))
     auto_save_tar(tar_id, progress_value=value)
 
 
@@ -770,44 +661,19 @@ def toggle_tar_edit(tar_id):
 def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
     br_notes_value, existing_tar_notes = unpack_notes(raw_current_notes)
     existing_tar_notes[str(tar_id)] = st.session_state.get(note_key, "") or ""
-    supabase.table("big_rocks").update({
-        "notes_progres": pack_notes(br_notes_value, existing_tar_notes),
-        "updated_at": now_iso(),
-    }).eq("id", br_id).execute()
+    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes), "updated_at": now_iso()}).eq("id", br_id).execute()
 
 
-def render_clickable_segment_bar(tar_id, prog_key, current_progress, disabled=False):
-    """Barra visual clicable amb botons natius de Streamlit: no obre enllaços externs."""
+def render_tar_slider(tar_id, prog_key, current_progress, disabled=False):
     current_progress = int(current_progress or 0)
-    active_segments = current_progress // 25
-    st.markdown("<div class='native-seg-card'>", unsafe_allow_html=True)
-    seg_cols = st.columns(4, gap="small")
-    for i, value in enumerate([25, 50, 75, 100], start=1):
-        wrapper_class = "native-seg-active" if active_segments >= i and current_progress > 0 else "native-seg-inactive"
-        with seg_cols[i - 1]:
-            st.markdown(f"<div class='{wrapper_class}'>", unsafe_allow_html=True)
-            st.button(
-                " ",
-                key=f"barseg_{tar_id}_{value}",
-                disabled=disabled,
-                on_click=set_tar_progress,
-                args=(tar_id, prog_key, value),
-                use_container_width=True,
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div class='tar-slider-card'>", unsafe_allow_html=True)
+    st.slider(t("state"), min_value=0, max_value=100, step=25, value=current_progress, key=prog_key, label_visibility="collapsed", disabled=disabled, on_change=auto_save_tar_from_slider, args=(tar_id, prog_key))
     labels = []
     for value in PROGRESS_OPTIONS:
-        cls = "active" if value == current_progress else ""
-        labels.append(f"<div class='native-seg-label {cls}'>{value}%</div>")
-    st.markdown(
-        f"""
-        <div class='native-seg-label-grid'>
-            {''.join(labels)}
-            <div class='native-seg-status'>{status_dot(current_progress)} {current_progress}%</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        cls = "active" if value == int(st.session_state.get(prog_key, current_progress)) else ""
+        labels.append(f"<div class='tar-slider-label {cls}'>{value}%</div>")
+    now_value = int(st.session_state.get(prog_key, current_progress))
+    st.markdown(f"""<div class='tar-slider-label-row'>{''.join(labels)}<div class='tar-slider-status'>{status_dot(now_value)} {now_value}%</div></div>""", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
@@ -875,7 +741,6 @@ else:
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 
-
 # ============================================================
 # LOGIN
 # ============================================================
@@ -886,19 +751,6 @@ if st.session_state.usuari_actual is None:
         st.markdown(f"""<div style="background:{PRIMARY};border-radius:10px;padding:36px 38px 34px 38px;margin-top:32px;box-shadow:0 3px 14px rgba(35,35,35,.12);">{logo_for_login()}<div style="color:#FFFFFF;font-size:28px;line-height:34px;font-weight:700;text-align:center;">{t('login_title')}</div><div style="color:#E7F2F7;font-size:14px;line-height:21px;text-align:center;margin-top:8px;">{t('login_subtitle')}</div></div>""", unsafe_allow_html=True)
         st.write("")
         st.selectbox(t("lang_login"), options=["ca", "es"], index=0 if st.session_state.idioma == "ca" else 1, format_func=lang_label, key="login_lang_selector", on_change=change_login_language)
-
-        # Microsoft queda ocult fins que estigui habilitat, però si hi ha una sessió vàlida ja creada, la respecta.
-        if MICROSOFT_LOGIN_ENABLED and hasattr(st, "user") and getattr(st.user, "is_logged_in", False):
-            email = microsoft_user_email()
-            if is_allowed_email(email):
-                migrate_existing_user_data(email)
-                ensure_microsoft_user_profile(email)
-                st.session_state.usuari_actual = email
-                st.session_state.microsoft_user_name = microsoft_user_name()
-                st.session_state.pantalla = "dashboard"
-                st.session_state.open_br_id = None
-                st.rerun()
-
         st.subheader(t("legacy_login"))
         tab1, tab2 = st.tabs([t("login_tab"), t("reg_tab")])
         with tab1:
@@ -1062,37 +914,9 @@ def render_report(title, allow_close=False):
         st.warning(t("carry_over"))
         for nom, desc, progres in tars_pendents or []:
             st.markdown(f"- **{nom}** → {desc} ({progres}%)")
-    def confirm_month_close():
-        close_month(USUARI, MES)
-        nou_mes = next_month(MES, st.session_state.idioma)
-        for br in brs:
-            pendents = [tar for tar in tars_by_br.get(br["id"], []) if int(tar.get("progres") or 0) < 100]
-            if pendents:
-                existing_notes, _ = unpack_notes(br.get("notes_progres"))
-                res = supabase.table("big_rocks").insert({"username": USUARI, "mes": nou_mes, "nom": br.get("nom") or "", "persones": br.get("persones") or "", "reunions": br.get("reunions") or "", "notes_progres": pack_notes(existing_notes, {}), "pregunta": br.get("pregunta") or "", "passos": br.get("passos") or "", "created_at": now_iso(), "updated_at": now_iso()}).execute()
-                data = s_data(res)
-                if data:
-                    new_br_id = data[0]["id"]
-                    rows = [{"id_br": new_br_id, "num": tar.get("num") or "TAR", "descripcio": tar.get("descripcio") or "", "progres": int(tar.get("progres") or 0), "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()} for tar in pendents]
-                    if rows:
-                        supabase.table("tars").insert(rows).execute()
-        st.session_state.mes_actual = nou_mes
+    if st.button(t("back")):
         st.session_state.pantalla = "dashboard"
-        st.session_state.open_br_id = None
         st.rerun()
-    st.write("")
-    if allow_close:
-        c1, c2, _ = st.columns([1, 2, 1])
-        with c1:
-            if st.button(t("cancel"), use_container_width=True):
-                st.session_state.pantalla = "dashboard"
-                st.rerun()
-        with c2:
-            st.button(t("confirm_close"), on_click=confirm_month_close, type="primary", use_container_width=True)
-    else:
-        if st.button(t("back")):
-            st.session_state.pantalla = "dashboard"
-            st.rerun()
 
 # ============================================================
 # DASHBOARD
@@ -1106,7 +930,7 @@ if st.session_state.pantalla == "admin":
 elif st.session_state.pantalla == "informe":
     render_report(t("report_title"), allow_close=False)
 elif st.session_state.pantalla == "resum":
-    render_report(t("summary"), allow_close=True)
+    render_report(t("summary"), allow_close=False)
 else:
     brs = get_brs(USUARI, MES)
     all_tars = get_all_tars_for_brs([br["id"] for br in brs])
@@ -1161,7 +985,7 @@ else:
             is_open = str(st.session_state.get("open_br_id")) == str(br_id)
             br_notes, tar_notes = unpack_notes(br.get("notes_progres"))
             icon = "▼" if is_open else "▶"
-            label = f"{icon} {br.get('nom') or ''}\n{status_dot(progres_mitja)} {progres_mitja}%   ·   {stats['total']} TARs   ·   {stats['completed']} completades   ·   {stats['in_progress']} en curs   ·   {stats['pending']} pendents"
+            label = f"{icon} {br.get('nom') or ''}  {status_dot(progres_mitja)} {progres_mitja}% · {stats['total']} TARs · {stats['completed']} completades · {stats['in_progress']} en curs · {stats['pending']} pendents"
             st.markdown('<div class="open-card-button">', unsafe_allow_html=True)
             st.button(label, key=f"card_br_{br_id}", use_container_width=True, on_click=toggle_bigrock, args=(br_id,))
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1169,7 +993,6 @@ else:
                 continue
             st.markdown(f"<div class='info-card'><div class='info-card-meta'><strong>{t('key_ppl')}:</strong> {safe_html(br.get('persones') or '-')} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {safe_html(br.get('reunions') or '-')}</div></div>", unsafe_allow_html=True)
             progress_bar(progres_mitja, f"{progres_mitja}%")
-            # V31: sense formulari ni botó de guardar. Cada canvi es desa automàticament.
             notes_key = f"notes_{br_id}"
             preg_key = f"preg_{br_id}"
             passos_key = f"passos_{br_id}"
@@ -1189,27 +1012,21 @@ else:
                 displayed_desc = st.session_state.get(desc_key, tar.get("descripcio") or "")
                 if not displayed_desc.strip():
                     displayed_desc = tar.get("num") or "TAR"
-
                 with st.container(border=True):
                     side_col, main_col = st.columns([0.08, 11.92], vertical_alignment="top")
                     with side_col:
-                        st.markdown("<div class='tar-left-blue'></div>", unsafe_allow_html=True)
+                        st.markdown("<div class='tar-left-blue-v36'></div>", unsafe_allow_html=True)
                     with main_col:
-                        title_col, status_col, edit_col = st.columns([8.5, 2.0, 0.7], vertical_alignment="center")
+                        title_col, edit_col = st.columns([10.8, 0.8], vertical_alignment="center")
                         with title_col:
-                            st.markdown(f"<div class='tar-title-v31'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
-                        with status_col:
-                            st.markdown("", unsafe_allow_html=True)
+                            st.markdown(f"<div class='tar-title-v36'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
                         with edit_col:
-                            st.markdown("<div class='tar-edit-btn-v31'>", unsafe_allow_html=True)
+                            st.markdown("<div class='tar-edit-btn-v36'>", unsafe_allow_html=True)
                             st.button("✏️", key=f"btn_edit_{tar_id}", disabled=es_tancat, on_click=toggle_tar_edit, args=(tar_id,))
                             st.markdown("</div>", unsafe_allow_html=True)
-
                         if st.session_state.get(f"editing_{tar_id}", False):
                             st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"), on_change=auto_save_tar, args=(tar_id, desc_key, None))
-
-                        render_clickable_segment_bar(tar_id, prog_key, current_progress, disabled=es_tancat)
-
+                        render_tar_slider(tar_id, prog_key, current_progress, disabled=es_tancat)
                         with st.expander(t("tar_notes"), expanded=False):
                             st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed", on_change=auto_save_tar_note, args=(br_id, br.get("notes_progres"), tar_id, note_key))
     if not es_tancat:
