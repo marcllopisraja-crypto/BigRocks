@@ -11,8 +11,8 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V39
-# Resum avaluació mensual + tancament amb prompt de noves Big Rocks
+# BIG ROCKS - SORIGUE | APP.py V40
+# Conclusions bilingues + eliminacio ultim mes + tancament robust
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -22,9 +22,6 @@ PRIMARY_DARK = "#216D8C"
 PRIMARY_HOVER = "#43B8ED"
 TEXT = "#232323"
 GREY = "#53565A"
-SUCCESS = "#03A446"
-WARNING = "#D9AF00"
-ERROR = "#E53A4F"
 LIGHT_BLUE = "#E7F2F7"
 PROGRESS_OPTIONS = [0, 25, 50, 75, 100]
 LANG_OPTIONS = {"ca": "🇦🇩 Català", "es": "🇪🇸 Español"}
@@ -64,6 +61,9 @@ TRANS = {
         "open_month": "Mes obert i editable",
         "closed_month": "Aquest mes està tancat.",
         "unlock": "🔓 Reobrir mes",
+        "delete_last_month": "🗑 Eliminar últim mes",
+        "confirm_delete_last_month": "Confirmo que vull eliminar l'últim mes i totes les seves TARs",
+        "deleted_last_month": "Últim mes eliminat correctament.",
         "logout": "Tancar sessió",
         "eval_close": "Avaluar i tancar mes",
         "eval_no_close": "Avaluar sense tancar",
@@ -99,10 +99,11 @@ TRANS = {
         "summary": "Resum de tancament",
         "report_title": "Informe de seguiment",
         "global_comp": "Grau de compliment global",
-        "successes": "Completades",
-        "in_progress": "En curs",
-        "carry_over": "Pendents / es traspassen",
-        "cancel": "Cancel·lar i tornar",
+        "conclusion": "Conclusió",
+        "close_prompt_title": "Mes tancat i nou mes obert",
+        "close_prompt_transfer": "S'han traspassat",
+        "close_prompt_question": "Vols crear més Big Rocks per al nou mes?",
+        "continue": "Continuar",
         "confirm_close": "Confirmar tancament i crear mes següent",
         "back": "Tornar",
         "admin_panel": "⚙ Administració",
@@ -141,6 +142,9 @@ TRANS = {
         "open_month": "Mes abierto y editable",
         "closed_month": "Este mes está cerrado.",
         "unlock": "🔓 Reabrir mes",
+        "delete_last_month": "🗑 Eliminar último mes",
+        "confirm_delete_last_month": "Confirmo que quiero eliminar el último mes y todas sus TARs",
+        "deleted_last_month": "Último mes eliminado correctamente.",
         "logout": "Cerrar sesión",
         "eval_close": "Evaluar y cerrar mes",
         "eval_no_close": "Evaluar sin cerrar",
@@ -176,10 +180,11 @@ TRANS = {
         "summary": "Resumen de cierre",
         "report_title": "Informe de seguimiento",
         "global_comp": "Grado de cumplimiento global",
-        "successes": "Completadas",
-        "in_progress": "En curso",
-        "carry_over": "Pendientes / se traspasan",
-        "cancel": "Cancelar y volver",
+        "conclusion": "Conclusión",
+        "close_prompt_title": "Mes cerrado y nuevo mes abierto",
+        "close_prompt_transfer": "Se han traspasado",
+        "close_prompt_question": "¿Quieres crear más Big Rocks para el nuevo mes?",
+        "continue": "Continuar",
         "confirm_close": "Confirmar cierre y crear mes siguiente",
         "back": "Volver",
         "admin_panel": "⚙ Administración",
@@ -193,92 +198,77 @@ TRANS = {
     },
 }
 
-
 def t(key):
     return TRANS.get(st.session_state.get("idioma", "ca"), TRANS["ca"]).get(key, key)
-
 
 def lang_label(code):
     return LANG_OPTIONS.get(code, code)
 
-
 def safe_html(value):
     return html.escape(str(value or ""))
-
 
 def inject_css():
     st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
-:root {{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-light-blue:{LIGHT_BLUE};}}
-html, body, input, textarea, button, select {{font-family:'Montserrat',Arial,sans-serif!important;}}
-.stApp {{
-    background-color:#F6FAFC;
-    background-image:
-      linear-gradient(180deg, rgba(246,250,252,.98) 0%, rgba(238,246,250,.98) 100%),
-      radial-gradient(circle at 10% 20%, rgba(0,156,222,.075) 0 1px, transparent 1px),
-      linear-gradient(90deg, rgba(33,109,140,.055) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(33,109,140,.045) 1px, transparent 1px);
-    background-size: auto, 36px 36px, 72px 72px, 72px 72px;
-}}
-.block-container {{padding-top:1.8rem;padding-bottom:3rem;max-width:1360px;}}
-h1 {{font-size:42px!important;line-height:50px!important;font-weight:700!important;color:var(--s-text)!important;}}
-h2 {{font-size:28px!important;line-height:34px!important;font-weight:700!important;color:var(--s-text)!important;}}
-.login-logo-text {{color:#FFFFFF;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
-[data-testid="stSidebar"] {{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%)!important;}}
-[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] .sidebar-white {{color:#FFFFFF!important;}}
-.sidebar-logo-text {{color:#FFFFFF;font-size:48px;font-weight:700;text-align:center;margin:20px 0 8px 0;}}
-.sidebar-app-title {{color:#FFFFFF;font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}}
-.sidebar-app-subtitle {{color:rgba(255,255,255,.88);font-size:13px;text-align:center;margin-bottom:22px;}}
-.sidebar-status-card {{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.38);border-radius:8px;padding:14px 16px;margin:14px 0 18px 0;}}
-.sidebar-pill {{display:inline-flex;border-radius:999px;padding:7px 13px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:#FFFFFF;font-size:13px;font-weight:700;}}
-[data-baseweb="select"] > div {{background:#FFFFFF!important;border:1px solid #BBBBBB!important;border-radius:4px!important;min-height:40px!important;}}
-[data-baseweb="select"] span,[data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] span,[data-testid="stSidebar"] [data-baseweb="select"] div,[data-testid="stSidebar"] [data-baseweb="select"] input {{color:var(--s-text)!important;}}
-[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea {{border-radius:4px!important;border:1px solid #BBBBBB!important;color:var(--s-text)!important;background:#FFFFFF!important;min-height:40px!important;}}
-.stButton>button,[data-testid="stFormSubmitButton"] button {{border-radius:4px!important;min-height:38px!important;font-weight:700!important;border:1px solid var(--s-primary)!important;background:var(--s-primary)!important;color:#FFFFFF!important;}}
-.stButton>button:hover,[data-testid="stFormSubmitButton"] button:hover {{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#FFFFFF!important;}}
-[data-testid="stSidebar"] .stButton>button {{background:rgba(255,255,255,.10)!important;border:1px solid rgba(255,255,255,.48)!important;color:#FFFFFF!important;}}
-.open-card-button button {{text-align:left!important;background:var(--s-primary)!important;color:#FFFFFF!important;border:1px solid var(--s-primary)!important;border-radius:4px!important;box-shadow:0 2px 8px rgba(0,156,222,.18)!important;padding:10px 16px!important;height:auto!important;min-height:42px!important;}}
-.open-card-button button:hover {{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#FFFFFF!important;}}
-.info-card {{background:#FFFFFF;border-radius:8px;padding:14px 16px;margin:12px 0 16px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
-.info-card-meta {{color:var(--s-grey);font-size:13px;}}
-.tar-title-v37 {{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
-.tar-left-blue-v37 {{width:6px;background:var(--s-primary);border-radius:999px;min-height:156px;height:100%;margin-top:0;}}
-.tar-edit-btn-v37 button {{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:var(--s-primary)!important;color:#FFFFFF!important;border:1px solid var(--s-primary)!important;}}
-.tar-edit-btn-v37 button:hover {{background:var(--s-primary-hover)!important;color:#FFFFFF!important;border-color:var(--s-primary-hover)!important;}}
-.s-progress {{width:100%;background:#D9E3E8;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
-.s-progress-inner {{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#FFFFFF;min-width:38px;background:var(--s-primary)!important;}}
-.tar-select-slider-wrap {{background:transparent!important;border:none!important;padding:0!important;margin:4px 0 6px 0;}}
-.tar-select-slider-wrap [data-testid="stSelectSlider"] {{padding-top:0!important;}}
-.tar-select-slider-wrap div[data-baseweb="slider"] > div {{background:#D9E3E8!important;height:16px!important;border-radius:999px!important;}}
-.tar-select-slider-wrap div[data-baseweb="slider"] div[role="slider"] {{background:var(--s-primary)!important;border:3px solid #FFFFFF!important;box-shadow:0 1px 4px rgba(0,0,0,.20)!important;width:22px!important;height:22px!important;}}
-.tar-select-slider-wrap div[data-baseweb="slider"] div[style*="background"] {{background:var(--s-primary)!important;}}
-.tar-slider-status {{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;margin-top:-10px;margin-bottom:4px;}}
-.kpi-card {{background:#FFFFFF;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
-.kpi-label {{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;}}
-.kpi-value {{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
-.help-box {{background:var(--s-light-blue);border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
-.help-box-title {{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
-.empty-state {{background:#FFFFFF;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
-.empty-icon {{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
-.evaluation-summary-card {{background:#FFFFFF;border:1px solid #C6E0EC;border-left:6px solid var(--s-primary);border-radius:8px;padding:16px 18px;margin:12px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
-.evaluation-summary-title {{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}}
-.evaluation-summary-text {{font-size:14px;color:var(--s-text);line-height:1.55;margin:4px 0;}}
-.evaluation-summary-pill {{display:inline-flex;align-items:center;gap:6px;background:#E7F2F7;border:1px solid #C6E0EC;color:var(--s-primary-dark);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700;margin:4px 8px 4px 0;}}
-.month-close-prompt {{background:#FFFFFF;border:1px solid #C6E0EC;border-left:6px solid var(--s-primary);border-radius:8px;padding:16px 18px;margin:12px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);}}
-.month-close-title {{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:6px;}}
-.month-close-text {{font-size:14px;color:var(--s-text);line-height:1.55;}}
-.report-br-card {{background:#FFFFFF;border:1px solid #E2EBF0;border-left:6px solid var(--s-primary);border-radius:8px;padding:14px 18px;margin:12px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
-.report-br-title {{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}}
-.report-tar-line {{font-size:14px;margin:4px 0;color:var(--s-text);}}
-.streamlit-expanderHeader,[data-testid="stExpander"] summary {{font-family:'Montserrat',Arial,sans-serif!important;font-weight:700!important;color:var(--s-text)!important;line-height:24px!important;min-height:36px!important;}}
-@media(max-width:620px) {{.tar-title-v37{{white-space:normal;}}}}
+:root{{--s-primary:{PRIMARY};--s-primary-dark:{PRIMARY_DARK};--s-primary-hover:{PRIMARY_HOVER};--s-text:{TEXT};--s-grey:{GREY};--s-light-blue:{LIGHT_BLUE};}}
+html, body, input, textarea, button, select{{font-family:'Montserrat',Arial,sans-serif!important;}}
+.stApp{{background-color:#F6FAFC;background-image:linear-gradient(180deg, rgba(246,250,252,.98) 0%, rgba(238,246,250,.98) 100%),radial-gradient(circle at 10% 20%, rgba(0,156,222,.075) 0 1px, transparent 1px),linear-gradient(90deg, rgba(33,109,140,.055) 1px, transparent 1px),linear-gradient(180deg, rgba(33,109,140,.045) 1px, transparent 1px);background-size:auto,36px 36px,72px 72px,72px 72px;}}
+.block-container{{padding-top:1.8rem;padding-bottom:3rem;max-width:1360px;}}
+h1{{font-size:42px!important;line-height:50px!important;font-weight:700!important;color:var(--s-text)!important;}}
+.login-logo-text{{color:#fff;font-size:56px;font-weight:700;line-height:1;text-align:center;margin:0 auto 24px auto;letter-spacing:-2px;}}
+[data-testid="stSidebar"]{{background:linear-gradient(180deg,var(--s-primary) 0%,#08A7E8 100%)!important;}}
+[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] .sidebar-white{{color:#fff!important;}}
+.sidebar-logo-text{{color:#fff;font-size:48px;font-weight:700;text-align:center;margin:20px 0 8px 0;}}
+.sidebar-app-title{{color:#fff;font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}}
+.sidebar-app-subtitle{{color:rgba(255,255,255,.88);font-size:13px;text-align:center;margin-bottom:22px;}}
+.sidebar-status-card{{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.38);border-radius:8px;padding:14px 16px;margin:14px 0 18px 0;}}
+.sidebar-pill{{display:inline-flex;border-radius:999px;padding:7px 13px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:13px;font-weight:700;}}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea{{border-radius:4px!important;border:1px solid #BBBBBB!important;color:var(--s-text)!important;background:#fff!important;min-height:40px!important;}}
+.stButton>button,[data-testid="stFormSubmitButton"] button{{border-radius:4px!important;min-height:38px!important;font-weight:700!important;border:1px solid var(--s-primary)!important;background:var(--s-primary)!important;color:#fff!important;}}
+.stButton>button:hover,[data-testid="stFormSubmitButton"] button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#fff!important;}}
+[data-testid="stSidebar"] .stButton>button{{background:rgba(255,255,255,.10)!important;border:1px solid rgba(255,255,255,.48)!important;color:#fff!important;}}
+.open-card-button button{{text-align:left!important;background:var(--s-primary)!important;color:#fff!important;border:1px solid var(--s-primary)!important;border-radius:4px!important;box-shadow:0 2px 8px rgba(0,156,222,.18)!important;padding:10px 16px!important;height:auto!important;min-height:42px!important;}}
+.open-card-button button:hover{{background:var(--s-primary-hover)!important;border-color:var(--s-primary-hover)!important;color:#fff!important;}}
+.info-card{{background:#fff;border-radius:8px;padding:14px 16px;margin:12px 0 16px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);border:1px solid #EEF2F4;border-left:6px solid var(--s-primary);}}
+.info-card-meta{{color:var(--s-grey);font-size:13px;}}
+.tar-title-v40{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
+.tar-left-blue-v40{{width:6px;background:var(--s-primary);border-radius:999px;min-height:156px;height:100%;margin-top:0;}}
+.tar-edit-btn-v40 button{{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:var(--s-primary)!important;color:#fff!important;border:1px solid var(--s-primary)!important;}}
+.s-progress{{width:100%;background:#D9E3E8;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}}
+.s-progress-inner{{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;min-width:38px;background:var(--s-primary)!important;}}
+.tar-select-slider-wrap{{background:transparent!important;border:none!important;padding:0!important;margin:4px 0 6px 0;}}
+.tar-select-slider-wrap [data-testid="stSelectSlider"]{{padding-top:0!important;}}
+.tar-select-slider-wrap div[data-baseweb="slider"] > div{{background:#D9E3E8!important;height:16px!important;border-radius:999px!important;}}
+.tar-select-slider-wrap div[data-baseweb="slider"] div[role="slider"]{{background:var(--s-primary)!important;border:3px solid #fff!important;box-shadow:0 1px 4px rgba(0,0,0,.20)!important;width:22px!important;height:22px!important;}}
+.tar-select-slider-wrap div[data-baseweb="slider"] div[style*="background"]{{background:var(--s-primary)!important;}}
+.tar-slider-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;margin-top:-10px;margin-bottom:4px;}}
+.kpi-card{{background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 2px 9px rgba(35,35,35,.08);border-top:4px solid var(--s-primary);min-height:112px;}}
+.kpi-label{{color:var(--s-grey);font-size:13px;font-weight:700;text-transform:uppercase;}}
+.kpi-value{{font-size:34px;line-height:42px;color:var(--s-text);font-weight:700;margin-top:8px;}}
+.help-box{{background:var(--s-light-blue);border:1px solid var(--s-primary-dark);border-radius:4px;padding:14px 16px;}}
+.help-box-title{{color:var(--s-primary-dark);font-weight:700;margin-bottom:4px;}}
+.empty-state{{background:#fff;border-radius:8px;padding:46px 28px;text-align:center;border:1px dashed #C6E0EC;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
+.empty-icon{{height:85px;width:85px;border-radius:50%;background:#C6E0EC;color:var(--s-primary-dark);display:inline-flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;margin-bottom:20px;}}
+.report-br-card{{background:#fff;border:1px solid #E2EBF0;border-left:6px solid var(--s-primary);border-radius:8px;padding:14px 18px;margin:12px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
+.report-br-title{{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}}
+.report-tar-line{{font-size:14px;margin:4px 0;color:var(--s-text);}}
+.evaluation-summary-card{{background:#fff;border:1px solid #C6E0EC;border-left:6px solid var(--s-primary);border-radius:8px;padding:16px 18px;margin:12px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}}
+.evaluation-summary-title{{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}}
+.evaluation-summary-text{{font-size:14px;color:var(--s-text);line-height:1.55;margin:4px 0;}}
+.evaluation-summary-pill{{display:inline-flex;align-items:center;gap:6px;background:#E7F2F7;border:1px solid #C6E0EC;color:var(--s-primary-dark);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700;margin:4px 8px 4px 0;}}
+.month-close-prompt{{background:#fff;border:1px solid #C6E0EC;border-left:6px solid var(--s-primary);border-radius:8px;padding:16px 18px;margin:12px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.08);}}
+.month-close-title{{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:6px;}}
+.month-close-text{{font-size:14px;color:var(--s-text);line-height:1.55;}}
+@media(max-width:620px){{.tar-title-v40{{white-space:normal;}}}}
 </style>
 """, unsafe_allow_html=True)
 
 inject_css()
 
+# ============================================================
 # SUPABASE
+# ============================================================
 
 def clean_supabase_url(url):
     if not url:
@@ -288,13 +278,11 @@ def clean_supabase_url(url):
         value = value[:-8]
     return value
 
-
 def get_secret_value(key, default=""):
     try:
         return st.secrets.get(key, default)
     except Exception:
         return os.environ.get(key, default)
-
 
 @st.cache_resource(show_spinner=False)
 def get_supabase_client():
@@ -309,23 +297,21 @@ if supabase is None:
     st.error(t("supabase_error"))
     st.stop()
 
-
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")
-
 
 def s_select(table, columns="*"):
     return supabase.table(table).select(columns)
 
-
 def s_data(response):
     return response.data if hasattr(response, "data") and response.data is not None else []
-
 
 def db_error_message(err):
     return str(err)
 
+# ============================================================
 # AUTH
+# ============================================================
 
 def hash_password(password, salt=None):
     if salt is None:
@@ -334,7 +320,6 @@ def hash_password(password, salt=None):
         salt = bytes.fromhex(salt)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120000)
     return salt.hex(), digest.hex()
-
 
 def verify_password(password, stored_password, stored_salt=None):
     if stored_salt is None or stored_salt == "":
@@ -345,11 +330,9 @@ def verify_password(password, stored_password, stored_salt=None):
     except Exception:
         return False
 
-
 def get_user(username):
     data = s_data(s_select("usuaris", "username, password, password_salt, language, created_at, last_login").eq("username", username).limit(1).execute())
     return data[0] if data else None
-
 
 def create_user(username, password, language):
     if get_user(username):
@@ -358,16 +341,16 @@ def create_user(username, password, language):
     supabase.table("usuaris").insert({"username": username, "password": digest, "password_salt": salt, "language": language, "created_at": now_iso(), "last_login": None}).execute()
     return True
 
-
 def migrate_plain_password(username, password):
     salt, digest = hash_password(password)
     supabase.table("usuaris").update({"password": digest, "password_salt": salt}).eq("username", username).execute()
 
-
 def update_user_login(username):
     supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
 
+# ============================================================
 # NOTES
+# ============================================================
 
 def unpack_notes(raw):
     if not raw:
@@ -380,16 +363,16 @@ def unpack_notes(raw):
             return "", {}
     return raw, {}
 
-
 def pack_notes(br_notes, tar_notes):
     return NOTES_PREFIX + json.dumps({"br_notes": br_notes or "", "tar_notes": tar_notes or {}}, ensure_ascii=False)
 
+# ============================================================
 # MONTHS
+# ============================================================
 
 def get_month_key(lang=None):
     now = datetime.now()
     return f"{now.year}-{now.month:02d}"
-
 
 def parse_month_to_canonical(month_text):
     if not month_text:
@@ -407,7 +390,6 @@ def parse_month_to_canonical(month_text):
                     return f"{int(year):04d}-{TRANS[lang]['months'].index(month_name)+1:02d}"
     return value
 
-
 def month_display(month_key, lang=None):
     lang = lang or st.session_state.get("idioma", "ca")
     canonical = parse_month_to_canonical(month_key)
@@ -417,7 +399,6 @@ def month_display(month_key, lang=None):
         if 0 <= idx < 12:
             return f"{TRANS[lang]['months'][idx]} {year}"
     return str(month_key)
-
 
 def month_aliases(month_key):
     canonical = parse_month_to_canonical(month_key)
@@ -430,7 +411,6 @@ def month_aliases(month_key):
             aliases.append(f"{TRANS['es']['months'][idx]} {year}")
     return list(dict.fromkeys(aliases))
 
-
 def next_month(month_text, target_lang=None):
     canonical = parse_month_to_canonical(month_text)
     if not re.match(r"^\d{4}-\d{2}$", canonical):
@@ -442,7 +422,9 @@ def next_month(month_text, target_lang=None):
         return f"{year + 1}-01"
     return f"{year:04d}-{month + 1:02d}"
 
+# ============================================================
 # MICROSOFT PREPARAT PER A FUTUR, NO VISIBLE
+# ============================================================
 
 def st_user_dict():
     try:
@@ -453,7 +435,6 @@ def st_user_dict():
         except Exception:
             return {}
 
-
 def microsoft_user_email():
     user_info = st_user_dict()
     for key in ["email", "preferred_username", "upn", "mail", "unique_name"]:
@@ -461,7 +442,6 @@ def microsoft_user_email():
         if value and "@" in str(value):
             return str(value).strip().lower()
     return ""
-
 
 def microsoft_user_name():
     user_info = st_user_dict()
@@ -471,10 +451,8 @@ def microsoft_user_name():
             return str(value)
     return microsoft_user_email()
 
-
 def is_allowed_email(email):
     return str(email or "").lower().endswith(ALLOWED_EMAIL_DOMAIN)
-
 
 def migrate_existing_user_data(email):
     email = str(email or "").lower().strip()
@@ -489,7 +467,6 @@ def migrate_existing_user_data(email):
                 except Exception:
                     pass
 
-
 def ensure_microsoft_user_profile(email):
     email = str(email or "").lower().strip()
     if not email:
@@ -503,26 +480,24 @@ def ensure_microsoft_user_profile(email):
     except Exception:
         pass
 
-
 def admin_users():
     raw = str(get_secret_value("ADMIN_USERS", "marc.llopis@sorigue.com,xavier.llopis@sorigue.com,marc.llopis,Xavier.llopis"))
     return [x.strip().lower() for x in raw.split(",") if x.strip()]
 
-
 def is_admin_user(username):
     return str(username or "").strip().lower() in admin_users()
-
 
 def list_users():
     return s_data(s_select("usuaris", "username, language, created_at, last_login").order("username").execute())
 
+# ============================================================
 # UI HELPERS
+# ============================================================
 
 def progress_bar(progress, label=None):
     progress = int(progress or 0)
     label_text = label if label else f"{progress}%"
     st.markdown(f"""<div class="s-progress"><div class="s-progress-inner" style="width:{max(progress,4)}%;">{label_text}</div></div>""", unsafe_allow_html=True)
-
 
 def status_dot(progress):
     progress = int(progress or 0)
@@ -536,19 +511,18 @@ def status_dot(progress):
         return "🟠"
     return "🔴"
 
-
 def logo_for_login():
     return '<div class="login-logo-text">sorigué</div>'
-
 
 def logo_for_sidebar():
     return '<div class="sidebar-logo-text">sorigué</div>'
 
-
 def kpi_card(label, value):
     st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{label}</div><div class='kpi-value'>{value}</div></div>", unsafe_allow_html=True)
 
+# ============================================================
 # DATA
+# ============================================================
 
 def get_brs(username, month):
     query = s_select("big_rocks", "id, nom, persones, reunions, notes_progres, pregunta, passos").eq("username", username)
@@ -556,19 +530,16 @@ def get_brs(username, month):
     query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
     return s_data(query.order("id").execute())
 
-
 def get_all_tars_for_brs(br_ids):
     if not br_ids:
         return []
     return s_data(s_select("tars", "id, id_br, num, descripcio, progres, estat").in_("id_br", br_ids).eq("estat", "Actiu").order("id").execute())
-
 
 def group_tars_by_br(tars):
     grouped = {}
     for tar in tars:
         grouped.setdefault(tar.get("id_br"), []).append(tar)
     return grouped
-
 
 def get_months(username):
     rows = s_data(s_select("big_rocks", "id, mes").eq("username", username).order("id", desc=True).execute())
@@ -579,24 +550,20 @@ def get_months(username):
             seen.append(mes)
     return seen
 
-
 def month_is_closed(username, month):
     query = s_select("mesos_tancats", "username, mes").eq("username", username)
     aliases = month_aliases(month)
     query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
     return len(s_data(query.limit(1).execute())) > 0
 
-
 def close_month(username, month):
     supabase.table("mesos_tancats").upsert({"username": username, "mes": parse_month_to_canonical(month), "closed_at": now_iso()}).execute()
-
 
 def unlock_month(username, month):
     aliases = month_aliases(month)
     query = supabase.table("mesos_tancats").delete().eq("username", username)
     query = query.in_("mes", aliases) if len(aliases) > 1 else query.eq("mes", aliases[0])
     query.execute()
-
 
 def get_existing_br_in_month(username, month, br_name):
     aliases = month_aliases(month)
@@ -605,11 +572,7 @@ def get_existing_br_in_month(username, month, br_name):
     data = s_data(query.limit(1).execute())
     return data[0] if data else None
 
-
 def create_next_month_from_pending(username, month):
-    """Tanca el mes actual i crea el mes següent amb les Big Rocks que tenen TARs no completades.
-    Si el mes següent ja existeix, evita duplicar Big Rocks i TARs amb la mateixa descripció.
-    """
     source_month = parse_month_to_canonical(month)
     target_month = next_month(source_month)
     brs = get_brs(username, source_month)
@@ -669,12 +632,28 @@ def create_next_month_from_pending(username, month):
 
     return target_month, created_brs, created_tars
 
-
 def close_month_and_open_next(username, month):
     close_month(username, month)
     target_month, created_brs, created_tars = create_next_month_from_pending(username, month)
     return target_month, created_brs, created_tars
 
+def delete_month(username, month):
+    canonical = parse_month_to_canonical(month)
+    brs = get_brs(username, canonical)
+    br_ids = [br["id"] for br in brs]
+    if br_ids:
+        supabase.table("tars").delete().in_("id_br", br_ids).execute()
+    aliases = month_aliases(canonical)
+    q = supabase.table("big_rocks").delete().eq("username", username)
+    q = q.in_("mes", aliases) if len(aliases) > 1 else q.eq("mes", aliases[0])
+    q.execute()
+    q2 = supabase.table("mesos_tancats").delete().eq("username", username)
+    q2 = q2.in_("mes", aliases) if len(aliases) > 1 else q2.eq("mes", aliases[0])
+    q2.execute()
+
+def latest_month(username):
+    months = [m for m in get_months(username) if re.match(r"^\d{4}-\d{2}$", str(m))]
+    return max(months) if months else None
 
 def stats_from_tars(tars):
     total = len(tars)
@@ -684,78 +663,78 @@ def stats_from_tars(tars):
     avg = int(sum(int(tar.get("progres") or 0) for tar in tars) / total) if total else 0
     return {"total": total, "completed": completed, "in_progress": in_progress, "pending": pending, "avg": avg}
 
-
-def compliance_label(percent):
+def compliance_label(percent, lang=None):
+    lang = lang or st.session_state.get("idioma", "ca")
     percent = int(percent or 0)
+    if lang == "es":
+        if percent < 40:
+            return "🔴", "cumplimiento bajo", "el mes requiere revisión y foco adicional en las Big Rocks con menor avance."
+        if percent < 70:
+            return "🟡", "progreso parcial", "el mes muestra avance, pero todavía queda por debajo del nivel deseable para un cierre sólido."
+        if percent < 90:
+            return "🔵", "buen resultado", "el mes presenta un buen resultado global y las tareas pendientes deben mantenerse en seguimiento en el siguiente periodo."
+        return "🟢", "resultado excelente", "el mes presenta un cumplimiento muy alto; si este nivel se repite siempre, conviene revisar si los objetivos son suficientemente ambiciosos."
     if percent < 40:
-        return "🔴", "Compliment baix", "Cal revisar si hi ha hagut massa Big Rocks obertes, bloquejos externs o TARs massa poc concretes."
+        return "🔴", "compliment baix", "el mes requereix revisió i més focus en les Big Rocks amb menor avanç."
     if percent < 70:
-        return "🟡", "Progrés parcial", "Hi ha avanç, però el mes queda per sota del llindar recomanat. Convindria prioritzar menys fronts i reforçar el seguiment."
+        return "🟡", "progrés parcial", "el mes mostra avanç, però encara queda per sota del nivell desitjable per a un tancament sòlid."
     if percent < 90:
-        return "🔵", "Bon resultat", "El resultat és saludable per objectius ambiciosos: s'ha avançat de forma clara i encara queda marge de millora."
-    return "🟢", "Excel·lent", "El resultat és molt alt. Si aquest nivell es repeteix sovint, pot indicar execució molt bona o objectius poc exigents."
-
+        return "🔵", "bon resultat", "el mes presenta un bon resultat global i les tasques pendents s'han de mantenir en seguiment al període següent."
+    return "🟢", "resultat excel·lent", "el mes presenta un compliment molt alt; si aquest nivell es repeteix sempre, convé revisar si els objectius són prou ambiciosos."
 
 def build_month_evaluation_summary(brs, tars_by_br, all_stats):
+    lang = st.session_state.get("idioma", "ca")
     avg = int(all_stats.get("avg", 0))
-    icon, label, interpretation = compliance_label(avg)
-    strong = []
-    risk = []
-    carry = []
-    for br in brs:
-        br_name = br.get("nom") or "Big Rock"
-        br_tars = tars_by_br.get(br["id"], [])
-        br_stats = stats_from_tars(br_tars)
-        br_avg = int(br_stats.get("avg", 0))
-        if br_avg >= 70:
-            strong.append((br_name, br_avg))
-        if br_avg < 60:
-            risk.append((br_name, br_avg))
-        pending_tars = [tar for tar in br_tars if int(tar.get("progres") or 0) < 100]
-        if pending_tars:
-            carry.append((br_name, len(pending_tars)))
-
-    strong_txt = "".join([f"<li><strong>{safe_html(name)}</strong> · {score}%</li>" for name, score in strong[:5]]) or "<li>No hi ha Big Rocks per sobre del 70%.</li>"
-    risk_txt = "".join([f"<li><strong>{safe_html(name)}</strong> · {score}%</li>" for name, score in risk[:5]]) or "<li>No hi ha Big Rocks per sota del 60%.</li>"
-    carry_txt = "".join([f"<li><strong>{safe_html(name)}</strong> · {count} TARs pendents/en curs</li>" for name, count in carry[:5]]) or "<li>No hi ha TARs pendents per traspassar.</li>"
-
+    icon, label, conclusion = compliance_label(avg, lang)
+    global_label = "Cumplimiento global" if lang == "es" else "Compliment global"
+    conclusion_label = t("conclusion")
     return f"""
     <div class='evaluation-summary-card'>
         <div class='evaluation-summary-title'>Anàlisi automàtica del mes</div>
-        <span class='evaluation-summary-pill'>{icon} {label}</span>
-        <span class='evaluation-summary-pill'>Compliment global: {avg}%</span>
-        <span class='evaluation-summary-pill'>{all_stats.get('completed', 0)} TARs completades</span>
-        <span class='evaluation-summary-pill'>{all_stats.get('in_progress', 0)} en curs · {all_stats.get('pending', 0)} pendents</span>
-        <p class='evaluation-summary-text'>{interpretation}</p>
-        <p class='evaluation-summary-text'><strong>Criteri utilitzat:</strong> 0-39% baix, 40-69% parcial, 70-89% bon resultat i 90-100% excel·lent.</p>
-        <p class='evaluation-summary-text'><strong>Big Rocks amb millor evolució</strong></p>
-        <ul>{strong_txt}</ul>
-        <p class='evaluation-summary-text'><strong>Big Rocks a revisar</strong></p>
-        <ul>{risk_txt}</ul>
-        <p class='evaluation-summary-text'><strong>Traspàs recomanat al mes següent</strong></p>
-        <ul>{carry_txt}</ul>
+        <span class='evaluation-summary-pill'>{icon} {safe_html(label.capitalize())}</span>
+        <span class='evaluation-summary-pill'>{global_label}: {avg}%</span>
+        <p class='evaluation-summary-text'><strong>{global_label}: {avg}%</strong></p>
+        <p class='evaluation-summary-text'><strong>{conclusion_label}:</strong> Segons aquest compliment, {safe_html(conclusion)}</p>
     </div>
     """
 
-
 def compact_month_evaluation_text(all_stats):
+    lang = st.session_state.get("idioma", "ca")
     avg = int(all_stats.get("avg", 0))
-    icon, label, _ = compliance_label(avg)
-    return f"{icon} {label} · compliment global {avg}% · {all_stats.get('completed', 0)} TARs completades · {all_stats.get('in_progress', 0)} en curs · {all_stats.get('pending', 0)} pendents"
-
+    icon, label, conclusion = compliance_label(avg, lang)
+    global_label = "Cumplimiento global" if lang == "es" else "Compliment global"
+    conclusion_label = "Conclusión" if lang == "es" else "Conclusió"
+    return f"{icon} {global_label}: {avg}%. {conclusion_label}: {label}; {conclusion}"
 
 def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes, pregunta, passos):
-    res = supabase.table("big_rocks").insert({"username": username, "mes": parse_month_to_canonical(month), "nom": nom, "persones": persones, "reunions": reunions, "notes_progres": pack_notes(br_notes, {}), "pregunta": pregunta, "passos": passos, "created_at": now_iso(), "updated_at": now_iso()}).execute()
+    res = supabase.table("big_rocks").insert({
+        "username": username,
+        "mes": parse_month_to_canonical(month),
+        "nom": nom,
+        "persones": persones,
+        "reunions": reunions,
+        "notes_progres": pack_notes(br_notes, {}),
+        "pregunta": pregunta,
+        "passos": passos,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }).execute()
     data = s_data(res)
     if not data:
         return None
     br_id = data[0]["id"]
-    rows = [{"id_br": br_id, "num": f"TAR {i}", "descripcio": desc.strip(), "progres": 0, "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()} for i, desc in enumerate(tar_descs, start=1) if desc.strip()]
+    rows = [
+        {"id_br": br_id, "num": f"TAR {i}", "descripcio": desc.strip(), "progres": 0, "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()}
+        for i, desc in enumerate(tar_descs, start=1)
+        if desc.strip()
+    ]
     if rows:
         supabase.table("tars").insert(rows).execute()
     return br_id
 
+# ============================================================
 # AUTOSAVE
+# ============================================================
 
 def auto_save_br_fields(br_id, raw_current_notes, notes_key, preg_key, passos_key):
     br_notes_value = st.session_state.get(notes_key, "")
@@ -763,7 +742,6 @@ def auto_save_br_fields(br_id, raw_current_notes, notes_key, preg_key, passos_ke
     passos_value = st.session_state.get(passos_key, "")
     _, existing_tar_notes = unpack_notes(raw_current_notes)
     supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes), "pregunta": pregunta_value, "passos": passos_value, "updated_at": now_iso()}).eq("id", br_id).execute()
-
 
 def auto_save_tar(tar_id, desc_key=None, progress_value=None):
     payload = {"updated_at": now_iso()}
@@ -773,22 +751,18 @@ def auto_save_tar(tar_id, desc_key=None, progress_value=None):
         payload["progres"] = int(progress_value)
     supabase.table("tars").update(payload).eq("id", tar_id).execute()
 
-
 def auto_save_tar_from_select_slider(tar_id, prog_key):
     value = int(st.session_state.get(prog_key, 0))
     auto_save_tar(tar_id, progress_value=value)
-
 
 def toggle_tar_edit(tar_id):
     key = f"editing_{tar_id}"
     st.session_state[key] = not st.session_state.get(key, False)
 
-
 def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
     br_notes_value, existing_tar_notes = unpack_notes(raw_current_notes)
     existing_tar_notes[str(tar_id)] = st.session_state.get(note_key, "") or ""
     supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes), "updated_at": now_iso()}).eq("id", br_id).execute()
-
 
 def render_tar_select_slider(tar_id, prog_key, current_progress, disabled=False):
     current_progress = int(current_progress or 0)
@@ -800,7 +774,9 @@ def render_tar_select_slider(tar_id, prog_key, current_progress, disabled=False)
     st.markdown(f"<div class='tar-slider-status'>{status_dot(now_value)} {now_value}%</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
+# ============================================================
 # STATE
+# ============================================================
 
 def remember_language(lang):
     if lang not in LANG_OPTIONS:
@@ -812,7 +788,6 @@ def remember_language(lang):
     except Exception:
         pass
 
-
 def change_language():
     selected = st.session_state.get("idioma_selector", "ca")
     remember_language(selected)
@@ -823,17 +798,14 @@ def change_language():
         except Exception:
             pass
 
-
 def change_login_language():
     remember_language(st.session_state.get("login_lang_selector", "ca"))
-
 
 def toggle_bigrock(br_id):
     current = st.session_state.get("open_br_id")
     current = str(current) if current is not None else None
     target = str(br_id)
     st.session_state.open_br_id = None if current == target else target
-
 
 def initial_language():
     try:
@@ -845,7 +817,6 @@ def initial_language():
     except Exception:
         pass
     return st.session_state.get("last_language", "ca")
-
 
 def remembered_user_from_query():
     try:
@@ -874,8 +845,12 @@ if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 if "month_close_prompt" not in st.session_state:
     st.session_state.month_close_prompt = None
+if "confirm_delete_latest_month" not in st.session_state:
+    st.session_state.confirm_delete_latest_month = False
 
+# ============================================================
 # LOGIN
+# ============================================================
 
 if st.session_state.usuari_actual is None:
     left, center, right = st.columns([1, 1.35, 1])
@@ -949,7 +924,9 @@ if st.session_state.usuari_actual is None:
                             st.error(db_error_message(e))
     st.stop()
 
+# ============================================================
 # SIDEBAR
+# ============================================================
 
 USUARI = st.session_state.usuari_actual
 IS_ADMIN = is_admin_user(USUARI)
@@ -983,6 +960,20 @@ with st.sidebar:
             st.rerun()
     else:
         st.markdown(f"<div class='sidebar-status-card'><div class='sidebar-white' style='font-weight:700;'>{t('status_open')}</div><div class='sidebar-white' style='margin-top:5px;'>{t('open_month')}</div></div>", unsafe_allow_html=True)
+
+    last_m = latest_month(USUARI)
+    if last_m and MES == last_m:
+        st.divider()
+        st.checkbox(t("confirm_delete_last_month"), key="confirm_delete_latest_month")
+        if st.button(t("delete_last_month"), use_container_width=True, disabled=not st.session_state.confirm_delete_latest_month):
+            delete_month(USUARI, last_m)
+            st.session_state.confirm_delete_latest_month = False
+            remaining = get_months(USUARI)
+            st.session_state.mes_actual = remaining[0] if remaining else get_month_key(st.session_state.idioma)
+            st.session_state.open_br_id = None
+            st.success(t("deleted_last_month"))
+            st.rerun()
+
     if IS_ADMIN:
         if st.button(t("admin_panel"), use_container_width=True):
             st.session_state.pantalla = "admin"
@@ -998,7 +989,9 @@ with st.sidebar:
         remember_language(last_lang)
         st.rerun()
 
+# ============================================================
 # PANTALLES
+# ============================================================
 
 def render_admin_panel():
     if not IS_ADMIN:
@@ -1021,7 +1014,6 @@ def render_admin_panel():
     if st.button(t("back")):
         st.session_state.pantalla = "dashboard"
         st.rerun()
-
 
 def render_report(title, allow_close=False):
     st.title(f"{title} · {month_display(MES)}")
@@ -1051,19 +1043,16 @@ def render_report(title, allow_close=False):
             st.session_state.mes_actual = target_month
             st.session_state.pantalla = "dashboard"
             st.session_state.open_br_id = None
-            st.session_state.month_close_prompt = {
-                "target_month": target_month,
-                "created_brs": created_brs,
-                "created_tars": created_tars,
-                "summary": close_summary_text,
-            }
+            st.session_state.month_close_prompt = {"target_month": target_month, "created_brs": created_brs, "created_tars": created_tars, "summary": close_summary_text}
             st.session_state.mostrar_formulari_br = False
             st.rerun()
     if st.button(t("back")):
         st.session_state.pantalla = "dashboard"
         st.rerun()
 
+# ============================================================
 # DASHBOARD
+# ============================================================
 
 MES = st.session_state.mes_actual
 es_tancat = month_is_closed(USUARI, MES)
@@ -1093,22 +1082,22 @@ else:
         st.markdown(
             f"""
             <div class='month-close-prompt'>
-                <div class='month-close-title'>Mes tancat i nou mes obert: {month_display(prompt.get('target_month'))}</div>
+                <div class='month-close-title'>{t('close_prompt_title')}: {month_display(prompt.get('target_month'))}</div>
                 <div class='month-close-text'>{safe_html(prompt.get('summary', ''))}</div>
-                <div class='month-close-text'>S'han traspassat <strong>{prompt.get('created_brs', 0)} Big Rocks</strong> i <strong>{prompt.get('created_tars', 0)} TARs</strong> pendents/en curs.</div>
-                <div class='month-close-text'>Vols crear més Big Rocks per al nou mes?</div>
+                <div class='month-close-text'>{t('close_prompt_transfer')} <strong>{prompt.get('created_brs', 0)} Big Rocks</strong> i <strong>{prompt.get('created_tars', 0)} TARs</strong>.</div>
+                <div class='month-close-text'>{t('close_prompt_question')}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
         p1, p2, _ = st.columns([1.2, 1.1, 3])
         with p1:
-            if st.button("➕ Crear Big Rock", type="primary", use_container_width=True):
+            if st.button("➕ " + t("create_br"), type="primary", use_container_width=True):
                 st.session_state.mostrar_formulari_br = True
                 st.session_state.month_close_prompt = None
                 st.rerun()
         with p2:
-            if st.button("Continuar", use_container_width=True):
+            if st.button(t("continue"), use_container_width=True):
                 st.session_state.month_close_prompt = None
                 st.rerun()
     k1, k2, k3, k4 = st.columns(4)
@@ -1181,13 +1170,13 @@ else:
                 with st.container(border=True):
                     side_col, main_col = st.columns([0.08, 11.92], vertical_alignment="top")
                     with side_col:
-                        st.markdown("<div class='tar-left-blue-v37'></div>", unsafe_allow_html=True)
+                        st.markdown("<div class='tar-left-blue-v40'></div>", unsafe_allow_html=True)
                     with main_col:
                         title_col, edit_col = st.columns([10.8, 0.8], vertical_alignment="center")
                         with title_col:
-                            st.markdown(f"<div class='tar-title-v37'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='tar-title-v40'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
                         with edit_col:
-                            st.markdown("<div class='tar-edit-btn-v37'>", unsafe_allow_html=True)
+                            st.markdown("<div class='tar-edit-btn-v40'>", unsafe_allow_html=True)
                             st.button("✏️", key=f"btn_edit_{tar_id}", disabled=es_tancat, on_click=toggle_tar_edit, args=(tar_id,))
                             st.markdown("</div>", unsafe_allow_html=True)
                         if st.session_state.get(f"editing_{tar_id}", False):
