@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V30
+# BIG ROCKS - SORIGUE | APP.py V31
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# Opció B segments + CSS corregit + edició robusta amb llapis
+# Auto-save + segments blaus únics + TAR amb barra lateral corporativa
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -286,6 +286,24 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 
 @media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
 @media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
+
+.tar-layout-v31{width:100%;}
+.tar-left-blue{width:6px;background:var(--s-primary);border-radius:999px;min-height:78px;margin-top:2px;}
+.tar-title-row-v31{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:6px;}
+.tar-title-v31{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tar-edit-btn-v31 button{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:#FFFFFF!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}
+.tar-edit-btn-v31 button:hover{background:#F0F8FC!important;color:var(--s-primary-dark)!important;border-color:var(--s-primary)!important;}
+.segment-choice-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:8px 0 4px 0;}
+.segment-choice{height:10px;border-radius:999px;background:#D9E3E8;}
+.segment-choice.active{background:var(--s-primary);}
+.segment-choice-labels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;align-items:center;margin-bottom:8px;}
+.segment-choice-label{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}
+.segment-choice-label.active{color:var(--s-primary-dark);}
+.segment-click-buttons div[data-testid="stButton"] button{height:24px!important;min-height:24px!important;padding:0!important;font-size:11px!important;background:#F7FBFD!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}
+.segment-click-buttons div[data-testid="stButton"] button:hover{background:var(--s-primary)!important;color:#FFFFFF!important;border-color:var(--s-primary)!important;}
+.segment-status-v31{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}
+.auto-save-caption{font-size:11px;color:var(--s-grey);margin-top:-2px;margin-bottom:4px;}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -685,6 +703,70 @@ def save_bigrock_form(br_id, raw_current_notes, br_notes, pregunta, passos, tar_
     for tar_id, payload in tar_updates.items():
         supabase.table("tars").update({"descripcio": payload.get("descripcio", ""), "progres": int(payload.get("progres", 0)), "updated_at": now_iso()}).eq("id", tar_id).execute()
 
+def auto_save_br_fields(br_id, raw_current_notes, notes_key, preg_key, passos_key):
+    br_notes_value = st.session_state.get(notes_key, "")
+    pregunta_value = st.session_state.get(preg_key, "")
+    passos_value = st.session_state.get(passos_key, "")
+    _, existing_tar_notes = unpack_notes(raw_current_notes)
+    supabase.table("big_rocks").update({
+        "notes_progres": pack_notes(br_notes_value, existing_tar_notes),
+        "pregunta": pregunta_value,
+        "passos": passos_value,
+        "updated_at": now_iso(),
+    }).eq("id", br_id).execute()
+
+
+def auto_save_tar(tar_id, desc_key=None, progress_value=None):
+    payload = {"updated_at": now_iso()}
+    if desc_key is not None:
+        payload["descripcio"] = st.session_state.get(desc_key, "")
+    if progress_value is not None:
+        payload["progres"] = int(progress_value)
+    supabase.table("tars").update(payload).eq("id", tar_id).execute()
+
+
+def set_tar_progress(tar_id, prog_key, value):
+    st.session_state[prog_key] = int(value)
+    auto_save_tar(tar_id, progress_value=value)
+
+
+def toggle_tar_edit(tar_id):
+    key = f"editing_{tar_id}"
+    st.session_state[key] = not st.session_state.get(key, False)
+
+
+def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
+    br_notes_value, existing_tar_notes = unpack_notes(raw_current_notes)
+    existing_tar_notes[str(tar_id)] = st.session_state.get(note_key, "") or ""
+    supabase.table("big_rocks").update({
+        "notes_progres": pack_notes(br_notes_value, existing_tar_notes),
+        "updated_at": now_iso(),
+    }).eq("id", br_id).execute()
+
+
+def segment_bar_html(progress):
+    progress = int(progress or 0)
+    active_segments = progress // 25
+    segments = "".join([
+        f"<div class='segment-choice {'active' if i <= active_segments and progress > 0 else ''}'></div>"
+        for i in range(1, 5)
+    ])
+    labels = "".join([
+        f"<div class='segment-choice-label {'active' if v == progress else ''}'>{v}%</div>"
+        for v in PROGRESS_OPTIONS
+    ])
+    return f"""
+    <div class='progress-segments-only'>
+        <div style='display:flex;align-items:center;gap:10px;'>
+            <div style='flex:1;'>
+                <div class='segment-choice-row'>{segments}</div>
+            </div>
+            <div class='segment-status-v31'>{status_dot(progress)} {progress}%</div>
+        </div>
+        <div class='segment-choice-labels'>{labels}</div>
+    </div>
+    """
+
 # ============================================================
 # STATE
 # ============================================================
@@ -1043,59 +1125,56 @@ else:
                 continue
             st.markdown(f"<div class='info-card'><div class='info-card-meta'><strong>{t('key_ppl')}:</strong> {safe_html(br.get('persones') or '-')} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {safe_html(br.get('reunions') or '-')}</div></div>", unsafe_allow_html=True)
             progress_bar(progres_mitja, f"{progres_mitja}%")
-            with st.form(f"form_bigrock_{br_id}"):
-                with st.expander(t("details"), expanded=False):
-                    notes_key = f"notes_{br_id}"
-                    preg_key = f"preg_{br_id}"
-                    passos_key = f"passos_{br_id}"
-                    st.text_area(t("prog"), value=br_notes, key=notes_key, disabled=es_tancat)
-                    st.text_input(t("need"), value=br.get("pregunta") or "", key=preg_key, disabled=es_tancat)
-                    st.text_input(t("next_steps"), value=br.get("passos") or "", key=passos_key, disabled=es_tancat)
-                st.markdown("### TARs")
-                tar_updates = {}
-                tar_note_updates = {}
-                for tar in tar_list:
-                    tar_id = tar["id"]
-                    progres = int(tar.get("progres") or 0)
-                    progres = progres if progres in PROGRESS_OPTIONS else 0
-                    desc_key = f"desc_{tar_id}"
-                    prog_key = f"prog_{tar_id}"
-                    edit_key = f"edit_{tar_id}"
-                    note_key = f"tar_note_{tar_id}"
-                    current_progress = int(st.session_state.get(prog_key, progres))
-                    displayed_desc = st.session_state.get(desc_key, tar.get("descripcio") or "")
-                    if not displayed_desc.strip():
-                        displayed_desc = tar.get("num") or "TAR"
-                    # Targeta real de Streamlit perquè tot quedi dins del rectangle i no surti cap línia buida.
-                    with st.container(border=True):
-                        c_title, c_progress, c_edit = st.columns([8.5, 2, 0.8], vertical_alignment="center")
-                        with c_title:
-                            st.markdown(f"<div class='tar-title-inline'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
-                        with c_progress:
-                            st.markdown(f"<div class='tar-right-inline'>{status_dot(current_progress)} {current_progress}%</div>", unsafe_allow_html=True)
-                        with c_edit:
-                            # Botó d'edició robust: popover si la versió de Streamlit ho suporta; fallback a expander.
-                            if hasattr(st, "popover"):
-                                with st.popover("✏️"):
-                                    st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
-                            else:
-                                with st.expander("✏️", expanded=False):
-                                    st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"))
-                        st.radio(t("state"), options=PROGRESS_OPTIONS, format_func=progress_radio_label, index=PROGRESS_OPTIONS.index(progres), horizontal=True, key=prog_key, label_visibility="collapsed", disabled=es_tancat)
-                        st.markdown(progress_preview_html(st.session_state.get(prog_key, current_progress)), unsafe_allow_html=True)
+            # V31: sense formulari ni botó de guardar. Cada canvi es desa automàticament.
+            notes_key = f"notes_{br_id}"
+            preg_key = f"preg_{br_id}"
+            passos_key = f"passos_{br_id}"
+            with st.expander(t("details"), expanded=False):
+                st.text_area(t("prog"), value=br_notes, key=notes_key, disabled=es_tancat, on_change=auto_save_br_fields, args=(br_id, br.get("notes_progres"), notes_key, preg_key, passos_key))
+                st.text_input(t("need"), value=br.get("pregunta") or "", key=preg_key, disabled=es_tancat, on_change=auto_save_br_fields, args=(br_id, br.get("notes_progres"), notes_key, preg_key, passos_key))
+                st.text_input(t("next_steps"), value=br.get("passos") or "", key=passos_key, disabled=es_tancat, on_change=auto_save_br_fields, args=(br_id, br.get("notes_progres"), notes_key, preg_key, passos_key))
+            st.markdown("### TARs")
+            for tar in tar_list:
+                tar_id = tar["id"]
+                progres = int(tar.get("progres") or 0)
+                progres = progres if progres in PROGRESS_OPTIONS else 0
+                desc_key = f"desc_{tar_id}"
+                prog_key = f"prog_{tar_id}"
+                note_key = f"tar_note_{tar_id}"
+                current_progress = int(st.session_state.get(prog_key, progres))
+                displayed_desc = st.session_state.get(desc_key, tar.get("descripcio") or "")
+                if not displayed_desc.strip():
+                    displayed_desc = tar.get("num") or "TAR"
+
+                with st.container(border=True):
+                    side_col, main_col = st.columns([0.08, 11.92], vertical_alignment="top")
+                    with side_col:
+                        st.markdown("<div class='tar-left-blue'></div>", unsafe_allow_html=True)
+                    with main_col:
+                        title_col, status_col, edit_col = st.columns([8.5, 2.0, 0.7], vertical_alignment="center")
+                        with title_col:
+                            st.markdown(f"<div class='tar-title-v31'>{safe_html(tar.get('num') or '')} · {safe_html(displayed_desc)}</div>", unsafe_allow_html=True)
+                        with status_col:
+                            st.markdown("", unsafe_allow_html=True)
+                        with edit_col:
+                            st.markdown("<div class='tar-edit-btn-v31'>", unsafe_allow_html=True)
+                            st.button("✏️", key=f"btn_edit_{tar_id}", disabled=es_tancat, on_click=toggle_tar_edit, args=(tar_id,))
+                            st.markdown("</div>", unsafe_allow_html=True)
+
+                        if st.session_state.get(f"editing_{tar_id}", False):
+                            st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"), on_change=auto_save_tar, args=(tar_id, desc_key, None))
+
+                        st.markdown(segment_bar_html(current_progress), unsafe_allow_html=True)
+                        st.markdown("<div class='segment-click-buttons'>", unsafe_allow_html=True)
+                        bcols = st.columns(len(PROGRESS_OPTIONS))
+                        for bcol, value in zip(bcols, PROGRESS_OPTIONS):
+                            with bcol:
+                                label = f"{value}%" if value != current_progress else f"✓ {value}%"
+                                st.button(label, key=f"seg_{tar_id}_{value}", disabled=es_tancat, on_click=set_tar_progress, args=(tar_id, prog_key, value), use_container_width=True)
+                        st.markdown("</div>", unsafe_allow_html=True)
+
                         with st.expander(t("tar_notes"), expanded=False):
-                            st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed")
-                    tar_updates[tar_id] = {"descripcio": st.session_state.get(desc_key, displayed_desc), "progres": st.session_state.get(prog_key, progres)}
-                    tar_note_updates[tar_id] = st.session_state.get(note_key, tar_notes.get(str(tar_id), ""))
-                submit_bigrock = st.form_submit_button(t("save_full_br"), type="primary", use_container_width=True, disabled=es_tancat)
-                if submit_bigrock:
-                    try:
-                        save_bigrock_form(br_id, br.get("notes_progres"), st.session_state.get(notes_key, ""), st.session_state.get(preg_key, ""), st.session_state.get(passos_key, ""), tar_updates, tar_note_updates)
-                        st.session_state.open_br_id = str(br_id)
-                        st.success(t("saved"))
-                        st.rerun()
-                    except Exception as e:
-                        st.error(db_error_message(e))
+                            st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed", on_change=auto_save_tar_note, args=(br_id, br.get("notes_progres"), tar_id, note_key))
     if not es_tancat:
         st.write("")
         if st.button(t("create_br"), type="primary"):
