@@ -10,9 +10,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V25
-# Login Microsoft @sorigue.com + migració exacta usuaris antics
-# TARs amb una sola línia de títol i edició desplegable
+# BIG ROCKS - SORIGUE | APP.py V26
+# Login híbrid: Microsoft @sorigue.com + usuari/contrasenya temporal
+# Manté migració exacta usuaris antics i TARs compactes
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -36,10 +36,10 @@ st.set_page_config(page_title="Big Rocks - Sorigué", layout="wide", page_icon="
 
 TRANS = {
     "ca": {
-        "login_title":"Accés a la Plataforma","login_subtitle":"Seguiment mensual dels teus Big Rocks i TARs","ms_login":"Iniciar sessió amb Microsoft","ms_only":"Només s'accepten comptes corporatius @sorigue.com.","ms_wrong_domain":"Aquest compte no és @sorigue.com. Utilitza el correu corporatiu de Sorigué.","ms_not_configured":"La configuració de Microsoft Login no està disponible. Revisa els Secrets de Streamlit.","lang_login":"🌍 Idioma","lang":"Idioma","conn_as":"Connectat com:","nav_months":"Navegar pels mesos","status_open":"Obert","status_closed":"Tancat","open_month":"Mes obert i editable","closed_month":"Aquest mes està tancat.","unlock":"Desbloquejar mes","logout":"Tancar sessió","eval_close":"Avaluar i tancar mes","eval_no_close":"Avaluar sense tancar","collapse_all":"Contraure els BR","active_brs":"Big Rocks actives","completed_tars":"TARs completats","pending_tars":"TARs pendents","avg_progress":"Progrés mitjà","help_title":"Consell d'usabilitat","help_body":"Clica una Big Rock per obrir-la. La resta quedaran plegades per mantenir la vista neta.","no_br_title":"Encara no tens cap Big Rock creada","no_br_body":"Crea la primera Big Rock per començar el seguiment mensual.","empty_cta":"Crea la primera Big Rock","key_ppl":"Persones clau","key_meet":"Reunions","details":"Detalls, preguntes i pròxims passos","prog":"Detalls de progrés","need":"Pregunta o necessitat","next_steps":"Pròxims passos","state":"Estat","desc":"Descripció de la tasca","tar_notes":"Anotacions de la TAR","tar_notes_placeholder":"Escriu observacions, acords, incidències o seguiment específic d'aquesta TAR...","edit_title":"✏️ Editar títol","save_full_br":"Guardar Big Rock","create_br":"Crear nova Big Rock","config_br":"Configura la teva nova Big Rock","title_br":"Títol de la Big Rock","title_placeholder":"Ex. Reduir incidències crítiques de l'obra","people_placeholder":"Ex. Xavier, Gerard, equip nord...","meetings_placeholder":"Ex. Seguiment setmanal, comitè mensual...","tar_placeholder":"Descriu una acció concreta i mesurable","save":"Guardar Big Rock","saved":"Canvis guardats correctament.","summary":"Resum de tancament","report_title":"Informe de seguiment","global_comp":"Grau de compliment global","successes":"Èxits completats","in_progress":"En curs","carry_over":"Es traspassen","cancel":"Cancel·lar i tornar","confirm_close":"Confirmar tancament i crear mes següent","back":"Tornar","admin_panel":"⚙ Administració","admin_badge":"Administrador","admin_users":"Gestió d'usuaris","admin_no_users":"No s'han trobat usuaris.","force_migration":"Forçar migració usuaris antics","migration_ok":"Migració executada.","supabase_error":"No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets.","months":["Gener","Febrer","Març","Abril","Maig","Juny","Juliol","Agost","Setembre","Octubre","Novembre","Desembre"]
+        "login_title":"Accés a la Plataforma","login_subtitle":"Seguiment mensual dels teus Big Rocks i TARs","ms_login":"Iniciar sessió amb Microsoft","ms_only":"Només s'accepten comptes corporatius @sorigue.com.","ms_pending":"Opció Microsoft preparada. Quan IT registri l'aplicació a Entra i afegeixis els Secrets, aquest botó quedarà operatiu.","ms_wrong_domain":"Aquest compte no és @sorigue.com. Utilitza el correu corporatiu de Sorigué.","ms_not_configured":"Microsoft Login encara no està configurat o falta Authlib. Pots entrar amb usuari/contrasenya temporal.","legacy_login":"Accés amb usuari i contrasenya","login_tab":"Iniciar sessió","reg_tab":"Registrar usuari","usr":"Usuari","pwd":"Contrasenya","new_usr":"Nou usuari","lang_reg":"Idioma per defecte","enter":"Entrar","register":"Registrar","err_login":"Usuari o contrasenya incorrectes.","succ_reg":"Usuari creat correctament.","err_reg":"Aquest usuari ja existeix.","required_fields":"Introdueix usuari i contrasenya per continuar.","lang_login":"🌍 Idioma","lang":"Idioma","conn_as":"Connectat com:","nav_months":"Navegar pels mesos","status_open":"Obert","status_closed":"Tancat","open_month":"Mes obert i editable","closed_month":"Aquest mes està tancat.","unlock":"Desbloquejar mes","logout":"Tancar sessió","eval_close":"Avaluar i tancar mes","eval_no_close":"Avaluar sense tancar","collapse_all":"Contraure els BR","active_brs":"Big Rocks actives","completed_tars":"TARs completats","pending_tars":"TARs pendents","avg_progress":"Progrés mitjà","help_title":"Consell d'usabilitat","help_body":"Clica una Big Rock per obrir-la. La resta quedaran plegades per mantenir la vista neta.","no_br_title":"Encara no tens cap Big Rock creada","no_br_body":"Crea la primera Big Rock per començar el seguiment mensual.","empty_cta":"Crea la primera Big Rock","key_ppl":"Persones clau","key_meet":"Reunions","details":"Detalls, preguntes i pròxims passos","prog":"Detalls de progrés","need":"Pregunta o necessitat","next_steps":"Pròxims passos","state":"Estat","desc":"Descripció de la tasca","tar_notes":"Anotacions de la TAR","tar_notes_placeholder":"Escriu observacions, acords, incidències o seguiment específic d'aquesta TAR...","edit_title":"✏️ Editar títol","save_full_br":"Guardar Big Rock","create_br":"Crear nova Big Rock","config_br":"Configura la teva nova Big Rock","title_br":"Títol de la Big Rock","title_placeholder":"Ex. Reduir incidències crítiques de l'obra","people_placeholder":"Ex. Xavier, Gerard, equip nord...","meetings_placeholder":"Ex. Seguiment setmanal, comitè mensual...","tar_placeholder":"Descriu una acció concreta i mesurable","save":"Guardar Big Rock","saved":"Canvis guardats correctament.","summary":"Resum de tancament","report_title":"Informe de seguiment","global_comp":"Grau de compliment global","successes":"Èxits completats","in_progress":"En curs","carry_over":"Es traspassen","cancel":"Cancel·lar i tornar","confirm_close":"Confirmar tancament i crear mes següent","back":"Tornar","admin_panel":"⚙ Administració","admin_badge":"Administrador","admin_users":"Gestió d'usuaris","admin_no_users":"No s'han trobat usuaris.","force_migration":"Forçar migració usuaris antics","migration_ok":"Migració executada.","supabase_error":"No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets.","months":["Gener","Febrer","Març","Abril","Maig","Juny","Juliol","Agost","Setembre","Octubre","Novembre","Desembre"]
     },
     "es": {
-        "login_title":"Acceso a la Plataforma","login_subtitle":"Seguimiento mensual de tus Big Rocks y TARs","ms_login":"Iniciar sesión con Microsoft","ms_only":"Solo se aceptan cuentas corporativas @sorigue.com.","ms_wrong_domain":"Esta cuenta no es @sorigue.com. Usa el correo corporativo de Sorigué.","ms_not_configured":"La configuración de Microsoft Login no está disponible. Revisa los Secrets de Streamlit.","lang_login":"🌍 Idioma","lang":"Idioma","conn_as":"Conectado como:","nav_months":"Navegar por los meses","status_open":"Abierto","status_closed":"Cerrado","open_month":"Mes abierto y editable","closed_month":"Este mes está cerrado.","unlock":"Desbloquear mes","logout":"Cerrar sesión","eval_close":"Evaluar y cerrar mes","eval_no_close":"Evaluar sin cerrar","collapse_all":"Contraer BR","active_brs":"Big Rocks activas","completed_tars":"TARs completados","pending_tars":"TARs pendientes","avg_progress":"Progreso medio","help_title":"Consejo de usabilidad","help_body":"Haz clic en una Big Rock para abrirla. El resto quedarán plegadas para mantener la vista limpia.","no_br_title":"Aún no tienes ninguna Big Rock creada","no_br_body":"Crea la primera Big Rock para empezar el seguimiento mensual.","empty_cta":"Crea la primera Big Rock","key_ppl":"Personas clave","key_meet":"Reuniones","details":"Detalles, preguntas y próximos pasos","prog":"Detalles de progreso","need":"Pregunta o necesidad","next_steps":"Próximos pasos","state":"Estado","desc":"Descripción de la tarea","tar_notes":"Anotaciones de la TAR","tar_notes_placeholder":"Escribe observaciones, acuerdos, incidencias o seguimiento específico de esta TAR...","edit_title":"✏️ Editar título","save_full_br":"Guardar Big Rock","create_br":"Crear nueva Big Rock","config_br":"Configura tu nueva Big Rock","title_br":"Título de la Big Rock","title_placeholder":"Ej. Reducir incidencias críticas de la obra","people_placeholder":"Ej. Xavier, Gerard, equipo norte...","meetings_placeholder":"Ej. Seguimiento semanal, comité mensual...","tar_placeholder":"Describe una acción concreta y medible","save":"Guardar Big Rock","saved":"Cambios guardados correctamente.","summary":"Resumen de cierre","report_title":"Informe de seguimiento","global_comp":"Grado de cumplimiento global","successes":"Éxitos completados","in_progress":"En curso","carry_over":"Se traspasan","cancel":"Cancelar y volver","confirm_close":"Confirmar cierre y crear mes siguiente","back":"Volver","admin_panel":"⚙ Administración","admin_badge":"Administrador","admin_users":"Gestión de usuarios","admin_no_users":"No se han encontrado usuarios.","force_migration":"Forzar migración usuarios antiguos","migration_ok":"Migración ejecutada.","supabase_error":"No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets.","months":["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+        "login_title":"Acceso a la Plataforma","login_subtitle":"Seguimiento mensual de tus Big Rocks y TARs","ms_login":"Iniciar sesión con Microsoft","ms_only":"Solo se aceptan cuentas corporativas @sorigue.com.","ms_pending":"Opción Microsoft preparada. Cuando IT registre la aplicación en Entra y añadas los Secrets, este botón quedará operativo.","ms_wrong_domain":"Esta cuenta no es @sorigue.com. Usa el correo corporativo de Sorigué.","ms_not_configured":"Microsoft Login aún no está configurado o falta Authlib. Puedes entrar con usuario/contraseña temporal.","legacy_login":"Acceso con usuario y contraseña","login_tab":"Iniciar sesión","reg_tab":"Registrar usuario","usr":"Usuario","pwd":"Contraseña","new_usr":"Nuevo usuario","lang_reg":"Idioma por defecto","enter":"Entrar","register":"Registrar","err_login":"Usuario o contraseña incorrectos.","succ_reg":"Usuario creado correctamente.","err_reg":"Este usuario ya existe.","required_fields":"Introduce usuario y contraseña para continuar.","lang_login":"🌍 Idioma","lang":"Idioma","conn_as":"Conectado como:","nav_months":"Navegar por los meses","status_open":"Abierto","status_closed":"Cerrado","open_month":"Mes abierto y editable","closed_month":"Este mes está cerrado.","unlock":"Desbloquear mes","logout":"Cerrar sesión","eval_close":"Evaluar y cerrar mes","eval_no_close":"Evaluar sin cerrar","collapse_all":"Contraer BR","active_brs":"Big Rocks activas","completed_tars":"TARs completados","pending_tars":"TARs pendientes","avg_progress":"Progreso medio","help_title":"Consejo de usabilidad","help_body":"Haz clic en una Big Rock para abrirla. El resto quedarán plegadas para mantener la vista limpia.","no_br_title":"Aún no tienes ninguna Big Rock creada","no_br_body":"Crea la primera Big Rock para empezar el seguimiento mensual.","empty_cta":"Crea la primera Big Rock","key_ppl":"Personas clave","key_meet":"Reuniones","details":"Detalles, preguntas y próximos pasos","prog":"Detalles de progreso","need":"Pregunta o necesidad","next_steps":"Próximos pasos","state":"Estado","desc":"Descripción de la tarea","tar_notes":"Anotaciones de la TAR","tar_notes_placeholder":"Escribe observaciones, acuerdos, incidencias o seguimiento específico de esta TAR...","edit_title":"✏️ Editar título","save_full_br":"Guardar Big Rock","create_br":"Crear nueva Big Rock","config_br":"Configura tu nueva Big Rock","title_br":"Título de la Big Rock","title_placeholder":"Ej. Reducir incidencias críticas de la obra","people_placeholder":"Ej. Xavier, Gerard, equipo norte...","meetings_placeholder":"Ej. Seguimiento semanal, comité mensual...","tar_placeholder":"Describe una acción concreta y medible","save":"Guardar Big Rock","saved":"Cambios guardados correctamente.","summary":"Resumen de cierre","report_title":"Informe de seguimiento","global_comp":"Grado de cumplimiento global","successes":"Éxitos completados","in_progress":"En curso","carry_over":"Se traspasan","cancel":"Cancelar y volver","confirm_close":"Confirmar cierre y crear mes siguiente","back":"Volver","admin_panel":"⚙ Administración","admin_badge":"Administrador","admin_users":"Gestión de usuarios","admin_no_users":"No se han encontrado usuarios.","force_migration":"Forzar migración usuarios antiguos","migration_ok":"Migración ejecutada.","supabase_error":"No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets.","months":["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
     },
 }
 
@@ -143,6 +143,42 @@ def unpack_notes(raw):
 def pack_notes(br_notes, tar_notes):
     return NOTES_PREFIX + json.dumps({"br_notes": br_notes or "", "tar_notes": tar_notes or {}}, ensure_ascii=False)
 
+def hash_password(password, salt=None):
+    import hashlib as _hashlib
+    if salt is None:
+        salt = os.urandom(16)
+    if isinstance(salt, str):
+        salt = bytes.fromhex(salt)
+    digest = _hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120000)
+    return salt.hex(), digest.hex()
+
+def verify_password(password, stored_password, stored_salt=None):
+    if stored_salt is None or stored_salt == "":
+        return password == stored_password
+    try:
+        _, digest = hash_password(password, stored_salt)
+        return digest == stored_password
+    except Exception:
+        return False
+
+def get_user(username):
+    data = s_data(s_select("usuaris", "username, password, password_salt, language, created_at, last_login").eq("username", username).limit(1).execute())
+    return data[0] if data else None
+
+def create_user(username, password, language):
+    if get_user(username):
+        return False
+    salt, digest = hash_password(password)
+    supabase.table("usuaris").insert({"username": username, "password": digest, "password_salt": salt, "language": language, "created_at": now_iso(), "last_login": None}).execute()
+    return True
+
+def migrate_plain_password(username, password):
+    salt, digest = hash_password(password)
+    supabase.table("usuaris").update({"password": digest, "password_salt": salt}).eq("username", username).execute()
+
+def update_user_login(username):
+    supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
+
 def get_month_key(lang=None):
     now = datetime.now()
     return f"{now.year}-{now.month:02d}"
@@ -223,10 +259,6 @@ def microsoft_user_name():
 def is_allowed_email(email):
     return str(email or "").lower().endswith(ALLOWED_EMAIL_DOMAIN)
 
-def get_user(username):
-    data = s_data(s_select("usuaris", "username, language, created_at, last_login").eq("username", username).limit(1).execute())
-    return data[0] if data else None
-
 def migrate_existing_user_data(email):
     email = str(email or "").lower().strip()
     aliases = USER_EMAIL_MIGRATION.get(email, [])
@@ -254,7 +286,7 @@ def ensure_microsoft_user_profile(email):
         pass
 
 def admin_users():
-    raw = str(get_secret_value("ADMIN_USERS", "marc.llopis@sorigue.com,xavier.llopis@sorigue.com"))
+    raw = str(get_secret_value("ADMIN_USERS", "marc.llopis@sorigue.com,xavier.llopis@sorigue.com,marc.llopis,Xavier.llopis"))
     return [x.strip().lower() for x in raw.split(",") if x.strip()]
 
 def is_admin_user(username):
@@ -267,7 +299,7 @@ def login_with_microsoft_button():
     try:
         st.login(provider="microsoft")
     except Exception as e:
-        st.error(f"{t('ms_not_configured')} {e}")
+        st.warning(f"{t('ms_not_configured')} ({e})")
 
 def progress_color(progress):
     progress = int(progress or 0)
@@ -298,7 +330,7 @@ def status_dot(progress):
     return "🔴"
 
 def progress_radio_label(value):
-    colors = {0: '🔴', 25: '🟠', 50: '🟡', 75: '🔵', 100: '🟢'}
+    colors = {0: "🔴", 25: "🟠", 50: "🟡", 75: "🔵", 100: "🟢"}
     return f"{colors.get(int(value), '⚪')} {int(value)}%"
 
 def logo_for_login():
@@ -435,7 +467,7 @@ else:
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
 
-# LOGIN MICROSOFT
+# LOGIN HÍBRID
 if st.session_state.usuari_actual is None:
     left, center, right = st.columns([1, 1.35, 1])
     with center:
@@ -464,10 +496,58 @@ if st.session_state.usuari_actual is None:
         else:
             if st.button(t("ms_login"), type="primary", use_container_width=True):
                 login_with_microsoft_button()
+            st.caption(t("ms_pending"))
             with st.expander("Configuració Microsoft Login", expanded=False):
                 config = "[auth]\nredirect_uri = \"https://LA_TEVA_APP.streamlit.app/oauth2callback\"\ncookie_secret = \"posa_un_secret_llarg_i_aleatori\"\n\n[auth.microsoft]\nclient_id = \"APP_CLIENT_ID\"\nclient_secret = \"APP_CLIENT_SECRET\"\nserver_metadata_url = \"https://login.microsoftonline.com/TENANT_ID/v2.0/.well-known/openid-configuration\"\nclient_kwargs = { prompt = \"select_account\" }"
                 st.code(config, language="toml")
-                st.caption("A Microsoft Entra ID, configura el Redirect URI acabat en /oauth2callback i controla l'accés al tenant de Sorigué.")
+        st.divider()
+        st.subheader(t("legacy_login"))
+        tab1, tab2 = st.tabs([t("login_tab"), t("reg_tab")])
+        with tab1:
+            with st.form("legacy_login_form"):
+                usuari = st.text_input(t("usr"), placeholder="marc.llopis")
+                contrasenya = st.text_input(t("pwd"), type="password")
+                submitted = st.form_submit_button(t("enter"), type="primary", use_container_width=True)
+                if submitted:
+                    username_clean = usuari.strip()
+                    if not username_clean or not contrasenya.strip():
+                        st.error(t("required_fields"))
+                    else:
+                        try:
+                            user = get_user(username_clean)
+                            if user and verify_password(contrasenya, user.get("password"), user.get("password_salt")):
+                                st.session_state.usuari_actual = username_clean
+                                st.session_state.microsoft_user_name = username_clean
+                                if user.get("language") in LANG_OPTIONS:
+                                    remember_language(user.get("language"))
+                                update_user_login(username_clean)
+                                if not user.get("password_salt"):
+                                    migrate_plain_password(username_clean, contrasenya)
+                                st.session_state.pantalla = "dashboard"
+                                st.session_state.open_br_id = None
+                                st.rerun()
+                            else:
+                                st.error(t("err_login"))
+                        except Exception as e:
+                            st.error(db_error_message(e))
+        with tab2:
+            with st.form("legacy_register_form"):
+                nou_usuari = st.text_input(t("new_usr"), placeholder="nom.cognom")
+                nova_contra = st.text_input(t("pwd"), type="password")
+                nou_idioma = st.selectbox(t("lang_reg"), options=["ca", "es"], index=0 if st.session_state.idioma == "ca" else 1, format_func=lang_label)
+                submitted = st.form_submit_button(t("register"), type="primary", use_container_width=True)
+                if submitted:
+                    if not nou_usuari.strip() or not nova_contra.strip():
+                        st.error(t("required_fields"))
+                    else:
+                        try:
+                            ok = create_user(nou_usuari.strip(), nova_contra, nou_idioma)
+                            if ok:
+                                st.success(t("succ_reg"))
+                            else:
+                                st.error(t("err_reg"))
+                        except Exception as e:
+                            st.error(db_error_message(e))
     st.stop()
 
 USUARI = st.session_state.usuari_actual
