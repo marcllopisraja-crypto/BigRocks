@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V32
+# BIG ROCKS - SORIGUE | APP.py V33
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# CSS escapades + auto-save + segments blaus únics
+# Barra clicable auto-save + barra lateral completa
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -288,7 +288,7 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 @media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
 
 .tar-layout-v31{{width:100%;}}
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:78px;margin-top:2px;}}
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:168px;height:100%;margin-top:0;}}
 .tar-title-row-v31{{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:6px;}}
 .tar-title-v31{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
 .tar-edit-btn-v31 button{{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:#FFFFFF!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}}
@@ -305,6 +305,13 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 .auto-save-caption{{font-size:11px;color:var(--s-grey);margin-top:-2px;margin-bottom:4px;}}
 @media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
 @media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
+
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:168px;height:100%;margin-top:0;}}
+.segment-click-bar div[data-testid="stButton"] button{{height:30px!important;min-height:30px!important;padding:0!important;font-size:11px!important;font-weight:700!important;border-radius:999px!important;background:#D9E3E8!important;color:var(--s-primary-dark)!important;border:1px solid #D9E3E8!important;}}
+.segment-click-bar div[data-testid="stButton"] button:hover{{background:var(--s-primary)!important;border-color:var(--s-primary)!important;color:#FFFFFF!important;}}
+.segment-click-bar-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;padding-top:5px;}}
+.segment-click-help{{font-size:11px;color:var(--s-grey);margin-top:2px;}}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -745,28 +752,25 @@ def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
     }).eq("id", br_id).execute()
 
 
-def segment_bar_html(progress):
-    progress = int(progress or 0)
-    active_segments = progress // 25
-    segments = "".join([
-        f"<div class='segment-choice {'active' if i <= active_segments and progress > 0 else ''}'></div>"
-        for i in range(1, 5)
-    ])
-    labels = "".join([
-        f"<div class='segment-choice-label {'active' if v == progress else ''}'>{v}%</div>"
-        for v in PROGRESS_OPTIONS
-    ])
-    return f"""
-    <div class='progress-segments-only'>
-        <div style='display:flex;align-items:center;gap:10px;'>
-            <div style='flex:1;'>
-                <div class='segment-choice-row'>{segments}</div>
-            </div>
-            <div class='segment-status-v31'>{status_dot(progress)} {progress}%</div>
-        </div>
-        <div class='segment-choice-labels'>{labels}</div>
-    </div>
-    """
+def render_clickable_segment_bar(tar_id, prog_key, current_progress, disabled=False):
+    """Barra de compliment clicable: cada segment és un botó que desa automàticament."""
+    current_progress = int(current_progress or 0)
+    st.markdown("<div class='segment-click-bar'>", unsafe_allow_html=True)
+    cols = st.columns([1, 1, 1, 1, 1, 0.55], vertical_alignment="center")
+    for col, value in zip(cols[:5], PROGRESS_OPTIONS):
+        with col:
+            label = f"✓ {value}%" if value == current_progress else f"{value}%"
+            st.button(
+                label,
+                key=f"bar_{tar_id}_{value}",
+                disabled=disabled,
+                on_click=set_tar_progress,
+                args=(tar_id, prog_key, value),
+                use_container_width=True,
+            )
+    with cols[5]:
+        st.markdown(f"<div class='segment-click-bar-status'>{status_dot(current_progress)} {current_progress}%</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # STATE
@@ -1165,14 +1169,7 @@ else:
                         if st.session_state.get(f"editing_{tar_id}", False):
                             st.text_input("", value=tar.get("descripcio") or "", key=desc_key, label_visibility="collapsed", disabled=es_tancat, placeholder=t("desc"), on_change=auto_save_tar, args=(tar_id, desc_key, None))
 
-                        st.markdown(segment_bar_html(current_progress), unsafe_allow_html=True)
-                        st.markdown("<div class='segment-click-buttons'>", unsafe_allow_html=True)
-                        bcols = st.columns(len(PROGRESS_OPTIONS))
-                        for bcol, value in zip(bcols, PROGRESS_OPTIONS):
-                            with bcol:
-                                label = f"{value}%" if value != current_progress else f"✓ {value}%"
-                                st.button(label, key=f"seg_{tar_id}_{value}", disabled=es_tancat, on_click=set_tar_progress, args=(tar_id, prog_key, value), use_container_width=True)
-                        st.markdown("</div>", unsafe_allow_html=True)
+                        render_clickable_segment_bar(tar_id, prog_key, current_progress, disabled=es_tancat)
 
                         with st.expander(t("tar_notes"), expanded=False):
                             st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed", on_change=auto_save_tar_note, args=(br_id, br.get("notes_progres"), tar_id, note_key))
