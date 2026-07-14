@@ -12,9 +12,9 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V33
+# BIG ROCKS - SORIGUE | APP.py V34
 # Login net amb correu @sorigue.com + TARs en una sola línia
-# Barra clicable auto-save + barra lateral completa
+# Barra visual clicable + auto-save + barra lateral completa
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -288,7 +288,7 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 @media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
 
 .tar-layout-v31{{width:100%;}}
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:168px;height:100%;margin-top:0;}}
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
 .tar-title-row-v31{{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:6px;}}
 .tar-title-v31{{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}}
 .tar-edit-btn-v31 button{{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:#FFFFFF!important;color:var(--s-primary-dark)!important;border:1px solid #C6E0EC!important;}}
@@ -306,11 +306,23 @@ h2{{font-size:28px!important;line-height:34px!important;font-weight:700!importan
 @media(max-width:900px){{.progress-segments-only{{padding:8px;}}}}
 @media(max-width:620px){{.tar-header-one-line{{white-space:normal;}}}}
 
-.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:168px;height:100%;margin-top:0;}}
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
 .segment-click-bar div[data-testid="stButton"] button{{height:30px!important;min-height:30px!important;padding:0!important;font-size:11px!important;font-weight:700!important;border-radius:999px!important;background:#D9E3E8!important;color:var(--s-primary-dark)!important;border:1px solid #D9E3E8!important;}}
 .segment-click-bar div[data-testid="stButton"] button:hover{{background:var(--s-primary)!important;border-color:var(--s-primary)!important;color:#FFFFFF!important;}}
 .segment-click-bar-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;padding-top:5px;}}
 .segment-click-help{{font-size:11px;color:var(--s-grey);margin-top:2px;}}
+
+
+.tar-left-blue{{width:6px;background:var(--s-primary);border-radius:999px;min-height:190px;height:100%;margin-top:0;}}
+.clickable-segment-bar{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;align-items:center;margin:8px 0 4px 0;}}
+.clickable-segment-bar a{{display:block;height:11px;border-radius:999px;background:#D9E3E8;text-decoration:none;border:1px solid #D9E3E8;}}
+.clickable-segment-bar a.active{{background:var(--s-primary);border-color:var(--s-primary);}}
+.clickable-segment-bar a:hover{{background:var(--s-primary-hover);border-color:var(--s-primary-hover);}}
+.clickable-segment-card{{background:#F7FBFD;border:1px solid #E2EBF0;border-radius:8px;padding:8px 10px;margin:8px 0 8px 0;}}
+.clickable-segment-bottom{{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 0.55fr;gap:4px;align-items:center;}}
+.clickable-segment-label{{font-size:11px;font-weight:700;color:var(--s-grey);text-align:center;}}
+.clickable-segment-label.active{{color:var(--s-primary-dark);}}
+.clickable-segment-status{{font-size:13px;font-weight:700;color:var(--s-text);white-space:nowrap;text-align:right;}}
 
 </style>
 """, unsafe_allow_html=True)
@@ -753,24 +765,30 @@ def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
 
 
 def render_clickable_segment_bar(tar_id, prog_key, current_progress, disabled=False):
-    """Barra de compliment clicable: cada segment és un botó que desa automàticament."""
+    """Barra visual clicable: cada segment és un enllaç que desa el % via query param."""
     current_progress = int(current_progress or 0)
-    st.markdown("<div class='segment-click-bar'>", unsafe_allow_html=True)
-    cols = st.columns([1, 1, 1, 1, 1, 0.55], vertical_alignment="center")
-    for col, value in zip(cols[:5], PROGRESS_OPTIONS):
-        with col:
-            label = f"✓ {value}%" if value == current_progress else f"{value}%"
-            st.button(
-                label,
-                key=f"bar_{tar_id}_{value}",
-                disabled=disabled,
-                on_click=set_tar_progress,
-                args=(tar_id, prog_key, value),
-                use_container_width=True,
-            )
-    with cols[5]:
-        st.markdown(f"<div class='segment-click-bar-status'>{status_dot(current_progress)} {current_progress}%</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    active_segments = current_progress // 25
+    hrefs = []
+    for i, value in enumerate([25, 50, 75, 100], start=1):
+        cls = "active" if i <= active_segments and current_progress > 0 else ""
+        href = "#" if disabled else f"?set_tar_progress={tar_id}:{value}"
+        hrefs.append(f"<a class='{cls}' href='{href}' title='{value}%'></a>")
+    labels = []
+    for value in PROGRESS_OPTIONS:
+        cls = "active" if value == current_progress else ""
+        labels.append(f"<div class='clickable-segment-label {cls}'>{value}%</div>")
+    st.markdown(
+        f"""
+        <div class='clickable-segment-card'>
+            <div class='clickable-segment-bar'>{''.join(hrefs)}</div>
+            <div class='clickable-segment-bottom'>
+                {''.join(labels)}
+                <div class='clickable-segment-status'>{status_dot(current_progress)} {current_progress}%</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ============================================================
 # STATE
@@ -836,6 +854,30 @@ else:
     st.session_state.mes_actual = parse_month_to_canonical(st.session_state.mes_actual)
 if "open_br_id" not in st.session_state:
     st.session_state.open_br_id = None
+
+# Gestiona clics sobre la barra de compliment TAR via query params.
+def process_tar_progress_query_param():
+    try:
+        raw = st.query_params.get("set_tar_progress")
+        if isinstance(raw, list):
+            raw = raw[0]
+        if raw:
+            tar_id_text, value_text = str(raw).split(":", 1)
+            tar_id_q = int(tar_id_text)
+            value_q = int(value_text)
+            if value_q in PROGRESS_OPTIONS:
+                prog_key_q = f"prog_{tar_id_q}"
+                st.session_state[prog_key_q] = value_q
+                auto_save_tar(tar_id_q, progress_value=value_q)
+            try:
+                del st.query_params["set_tar_progress"]
+            except Exception:
+                st.query_params.clear()
+            st.rerun()
+    except Exception as e:
+        st.error(db_error_message(e))
+
+process_tar_progress_query_param()
 
 # ============================================================
 # LOGIN
