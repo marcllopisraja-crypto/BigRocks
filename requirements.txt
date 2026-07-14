@@ -1,3 +1,5 @@
-streamlit
-pandas
+streamlit>=1.46.0
+streamlit[auth]
 supabase
+pandas
+openpyxl
