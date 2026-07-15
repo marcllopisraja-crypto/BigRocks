@@ -6,7 +6,7 @@ url = "https://bigrocks.streamlit.app/" # La web que vols comprovar
 try:
     response = requests.get(url, timeout=10)
     if response.status_code == 200:
-        print(f"La web url{} està activa.")
+        print(f"La web {url} està activa.")
     else:
         print(f"La web ha respost amb el codi: {response.status_code}")
         sys.exit(1) # Això farà que l'acció falli i t'avisin
