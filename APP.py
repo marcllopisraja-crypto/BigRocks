@@ -11,13 +11,12 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V42
+# BIG ROCKS - SORIGUE | APP.py V44
 # Versio descarregable reconstruida i corregida
-# - Crear Big Rock nomes amb boto Guardar, no ENTER
-# - Minim 1 TAR obligatoria
-# - Editar, eliminar i duplicar Big Rock
-# - Big Rocks recurrents i reinici opcional al 0% en el traspas de mes
-# - Tancament crea/obre el mes seguent i sincronitza selector
+# - Crear Big Rock amb 4 TARs inicials i afegir fins a 6
+# - Limit 6 TARs per Big Rock amb avís metodològic
+# - Afegir i eliminar TARs des de l’edició
+# - Editar, eliminar, duplicar i marcar Big Rock recurrent
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -29,6 +28,7 @@ TEXT = "#232323"
 GREY = "#53565A"
 LIGHT_BLUE = "#E7F2F7"
 PROGRESS_OPTIONS = [0, 25, 50, 75, 100]
+MAX_TARS_PER_BIGROCK = 6
 LANG_OPTIONS = {"ca": "🇦🇩 Català", "es": "🇪🇸 Español"}
 
 USER_EMAIL_MIGRATION = {
@@ -128,6 +128,14 @@ TRANS = {
         "br_duplicated": "Big Rock duplicada correctament.",
         "br_recurrent": "Big Rock recurrent",
         "min_one_tar": "Cal crear almenys una TAR per guardar la Big Rock.",
+        "min_one_tar_delete": "No es pot eliminar aquesta TAR perquè una Big Rock ha de tenir almenys una TAR.",
+        "max_tars_warning": "Aquesta Big Rock ja té 6 TARs. Es recomana partir la Big Rock en dues fases diferenciades per millorar el focus.",
+        "add_tar": "➕ Afegir TAR",
+        "new_tar": "Nova TAR",
+        "delete_tar": "🗑 Eliminar TAR",
+        "confirm_delete_tar": "Confirmo que vull eliminar aquesta TAR",
+        "tar_added": "TAR afegida correctament.",
+        "tar_deleted": "TAR eliminada correctament.",
         "save_br_changes": "Guardar canvis Big Rock",
         "recurrent_detected": "Big Rocks recurrents detectades",
         "reset_recurrent_hint": "Marca les Big Rocks recurrents que vols reiniciar al 0% quan es copiïn al mes següent.",
@@ -222,6 +230,14 @@ TRANS = {
         "br_duplicated": "Big Rock duplicada correctamente.",
         "br_recurrent": "Big Rock recurrente",
         "min_one_tar": "Hay que crear al menos una TAR para guardar la Big Rock.",
+        "min_one_tar_delete": "No se puede eliminar esta TAR porque una Big Rock debe tener al menos una TAR.",
+        "max_tars_warning": "Esta Big Rock ya tiene 6 TARs. Se recomienda dividir la Big Rock en dos fases diferenciadas para mejorar el foco.",
+        "add_tar": "➕ Añadir TAR",
+        "new_tar": "Nueva TAR",
+        "delete_tar": "🗑 Eliminar TAR",
+        "confirm_delete_tar": "Confirmo que quiero eliminar esta TAR",
+        "tar_added": "TAR añadida correctamente.",
+        "tar_deleted": "TAR eliminada correctamente.",
         "save_br_changes": "Guardar cambios Big Rock",
         "recurrent_detected": "Big Rocks recurrentes detectadas",
         "reset_recurrent_hint": "Marca las Big Rocks recurrentes que quieres reiniciar al 0% al copiarlas al mes siguiente.",
@@ -743,6 +759,38 @@ def delete_bigrock(br_id):
     supabase.table("big_rocks").delete().eq("id", br_id).execute()
 
 
+def renumber_tars(br_id):
+    rows = get_all_tars_for_brs([br_id])
+    for idx, tar in enumerate(rows, start=1):
+        supabase.table("tars").update({"num": f"TAR {idx}", "updated_at": now_iso()}).eq("id", tar["id"]).execute()
+
+
+def add_tar_to_bigrock(br_id, current_tars, desc):
+    desc = str(desc or "").strip()
+    if not desc:
+        return None
+    if len(current_tars) >= MAX_TARS_PER_BIGROCK:
+        raise ValueError(t("max_tars_warning"))
+    next_num = f"TAR {len(current_tars) + 1}"
+    res = supabase.table("tars").insert({
+        "id_br": br_id,
+        "num": next_num,
+        "descripcio": desc,
+        "progres": 0,
+        "estat": "Actiu",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }).execute()
+    return s_data(res)[0]["id"] if s_data(res) else None
+
+
+def delete_tar_from_bigrock(br_id, tar_id, current_tars):
+    if len(current_tars) <= 1:
+        raise ValueError(t("min_one_tar_delete"))
+    supabase.table("tars").delete().eq("id", tar_id).execute()
+    renumber_tars(br_id)
+
+
 def update_bigrock_details(br_id, nom, persones, reunions, raw_notes, br_notes, pregunta, passos, recurrent):
     _, tar_notes, meta = unpack_notes(raw_notes)
     meta["recurrent"] = bool(recurrent)
@@ -845,6 +893,8 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
     clean_tars = [str(desc).strip() for desc in tar_descs if str(desc).strip()]
     if not clean_tars:
         raise ValueError(t("min_one_tar"))
+    if len(clean_tars) > MAX_TARS_PER_BIGROCK:
+        raise ValueError(t("max_tars_warning"))
     res = supabase.table("big_rocks").insert({
         "username": username,
         "mes": parse_month_to_canonical(month),
@@ -1003,6 +1053,8 @@ if "month_close_prompt" not in st.session_state:
     st.session_state.month_close_prompt = None
 if "month_selector_nonce" not in st.session_state:
     st.session_state.month_selector_nonce = 0
+if "new_br_tar_count" not in st.session_state:
+    st.session_state.new_br_tar_count = 4
 
 # ============================================================
 # LOGIN
@@ -1391,6 +1443,19 @@ else:
                         st.session_state[f"editing_br_{br_id}"] = False
                         st.success(t("saved"))
                         st.rerun()
+                if len(tar_list) < MAX_TARS_PER_BIGROCK:
+                    st.markdown("---")
+                    new_tar_key = f"new_tar_{br_id}"
+                    st.text_input(t("new_tar"), key=new_tar_key, placeholder=t("tar_placeholder"))
+                    if st.button(t("add_tar"), key=f"add_tar_btn_{br_id}", use_container_width=True):
+                        try:
+                            add_tar_to_bigrock(br_id, tar_list, st.session_state.get(new_tar_key, ""))
+                            st.success(t("tar_added"))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(db_error_message(e))
+                else:
+                    st.warning(t("max_tars_warning"))
                 st.markdown("</div>", unsafe_allow_html=True)
 
             notes_key = f"notes_{br_id}"
@@ -1431,42 +1496,69 @@ else:
                         render_tar_select_slider(tar_id, prog_key, current_progress, disabled=es_tancat)
                         with st.expander(t("tar_notes"), expanded=False):
                             st.text_area(t("tar_notes"), value=tar_notes.get(str(tar_id), ""), key=note_key, disabled=es_tancat, placeholder=t("tar_notes_placeholder"), label_visibility="collapsed", on_change=auto_save_tar_note, args=(br_id, br.get("notes_progres"), tar_id, note_key))
+                        if not es_tancat:
+                            with st.expander(t("delete_tar"), expanded=False):
+                                confirm_tar_delete = st.checkbox(t("confirm_delete_tar"), key=f"confirm_delete_tar_{tar_id}")
+                                if st.button(t("delete_tar"), key=f"delete_tar_btn_{tar_id}", disabled=not confirm_tar_delete, use_container_width=True):
+                                    try:
+                                        delete_tar_from_bigrock(br_id, tar_id, tar_list)
+                                        st.success(t("tar_deleted"))
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(db_error_message(e))
 
     if not es_tancat:
         st.write("")
         if st.button(t("create_br"), type="primary"):
             st.session_state.mostrar_formulari_br = not st.session_state.mostrar_formulari_br
+            if st.session_state.mostrar_formulari_br:
+                st.session_state.new_br_tar_count = 4
         if st.session_state.mostrar_formulari_br:
             st.subheader(t("config_br"))
+            # V44: comencem amb 4 TARs visibles i permetem afegir fins a 6 sense que ENTER creï la Big Rock.
+            if st.session_state.new_br_tar_count < MAX_TARS_PER_BIGROCK:
+                c_add, c_msg = st.columns([1.2, 3])
+                with c_add:
+                    if st.button(t("add_tar"), key="add_new_br_tar_field", use_container_width=True):
+                        st.session_state.new_br_tar_count = min(MAX_TARS_PER_BIGROCK, st.session_state.new_br_tar_count + 1)
+                        st.rerun()
+                with c_msg:
+                    st.caption(f"{st.session_state.new_br_tar_count}/{MAX_TARS_PER_BIGROCK} TARs")
+            else:
+                st.warning(t("max_tars_warning"))
             try:
                 nova_form = st.form("form_nova_br", enter_to_submit=False)
             except TypeError:
                 nova_form = st.form("form_nova_br")
             with nova_form:
-                nou_nom = st.text_input(t("title_br"), placeholder=t("title_placeholder"))
+                nou_nom = st.text_input(t("title_br"), placeholder=t("title_placeholder"), key="new_br_title")
                 c1, c2 = st.columns(2)
-                persones = c1.text_input(t("key_ppl"), placeholder=t("people_placeholder"))
-                reunions = c2.text_input(t("key_meet"), placeholder=t("meetings_placeholder"))
-                recurrent_new = st.checkbox(t("br_recurrent"), value=False)
+                persones = c1.text_input(t("key_ppl"), placeholder=t("people_placeholder"), key="new_br_people")
+                reunions = c2.text_input(t("key_meet"), placeholder=t("meetings_placeholder"), key="new_br_meetings")
+                recurrent_new = st.checkbox(t("br_recurrent"), value=False, key="new_br_recurrent")
                 with st.expander(t("details"), expanded=True):
-                    br_notes_new = st.text_area(t("prog"), placeholder=t("prog"))
-                    pregunta_new = st.text_input(t("need"), placeholder=t("need"))
-                    passos_new = st.text_input(t("next_steps"), placeholder=t("next_steps"))
+                    br_notes_new = st.text_area(t("prog"), placeholder=t("prog"), key="new_br_notes")
+                    pregunta_new = st.text_input(t("need"), placeholder=t("need"), key="new_br_need")
+                    passos_new = st.text_input(t("next_steps"), placeholder=t("next_steps"), key="new_br_next_steps")
                 st.markdown("### TARs")
-                t1 = st.text_input("TAR 1", placeholder=t("tar_placeholder"))
-                t2 = st.text_input("TAR 2", placeholder=t("tar_placeholder"))
-                t3 = st.text_input("TAR 3", placeholder=t("tar_placeholder"))
-                t4 = st.text_input("TAR 4", placeholder=t("tar_placeholder"))
+                st.caption(t("max_tars_warning"))
+                new_tars = []
+                for i in range(1, st.session_state.new_br_tar_count + 1):
+                    new_tars.append(st.text_input(f"TAR {i}", placeholder=t("tar_placeholder"), key=f"new_br_tar_{i}"))
                 submitted = st.form_submit_button(t("save"), type="primary", use_container_width=True)
                 if submitted:
                     if not nou_nom.strip():
                         st.error(t("title_br"))
-                    elif not any(x.strip() for x in [t1, t2, t3, t4]):
+                    elif not any(x.strip() for x in new_tars):
                         st.error(t("min_one_tar"))
                     else:
                         try:
-                            new_id = create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4], br_notes_new, pregunta_new, passos_new, recurrent_new)
+                            new_id = create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), new_tars, br_notes_new, pregunta_new, passos_new, recurrent_new)
                             st.session_state.mostrar_formulari_br = False
+                            st.session_state.new_br_tar_count = 4
+                            for cleanup_key in ["new_br_title", "new_br_people", "new_br_meetings", "new_br_recurrent", "new_br_notes", "new_br_need", "new_br_next_steps"] + [f"new_br_tar_{i}" for i in range(1, MAX_TARS_PER_BIGROCK + 1)]:
+                                if cleanup_key in st.session_state:
+                                    del st.session_state[cleanup_key]
                             st.session_state.open_br_id = str(new_id)
                             st.rerun()
                         except Exception as e:
