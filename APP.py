@@ -11,13 +11,13 @@ import streamlit as st
 from supabase import create_client
 
 # ============================================================
-# BIG ROCKS - SORIGUE | APP.py V41
+# BIG ROCKS - SORIGUE | APP.py V42
 # Versio descarregable reconstruida i corregida
-# - Resum d'avaluacio bilingue CA/ES
-# - Tancament crea/obre el mes seguent i traspassa TARs pendents
-# - Selector de mes sincronitzat per evitar quedar-se al mes anterior
-# - Eliminar ultim mes sense StreamlitAPIException
-# - Auto-guardat de TARs, notes i camps de Big Rock
+# - Crear Big Rock nomes amb boto Guardar, no ENTER
+# - Minim 1 TAR obligatoria
+# - Editar, eliminar i duplicar Big Rock
+# - Big Rocks recurrents i reinici opcional al 0% en el traspas de mes
+# - Tancament crea/obre el mes seguent i sincronitza selector
 # ============================================================
 
 NOTES_PREFIX = "__BIGROCK_NOTES_JSON_V1__"
@@ -120,6 +120,17 @@ TRANS = {
         "force_migration": "Forçar migració usuaris antics",
         "migration_ok": "Migració executada.",
         "supabase_error": "No s'ha pogut connectar amb Supabase. Revisa SUPABASE_URL i SUPABASE_KEY a Streamlit Secrets.",
+        "edit_br": "✏️ Editar Big Rock",
+        "delete_br": "🗑 Eliminar Big Rock",
+        "duplicate_br": "📋 Duplicar Big Rock",
+        "confirm_delete_br": "Confirmo que vull eliminar aquesta Big Rock i totes les seves TARs",
+        "br_deleted": "Big Rock eliminada correctament.",
+        "br_duplicated": "Big Rock duplicada correctament.",
+        "br_recurrent": "Big Rock recurrent",
+        "min_one_tar": "Cal crear almenys una TAR per guardar la Big Rock.",
+        "save_br_changes": "Guardar canvis Big Rock",
+        "recurrent_detected": "Big Rocks recurrents detectades",
+        "reset_recurrent_hint": "Marca les Big Rocks recurrents que vols reiniciar al 0% quan es copiïn al mes següent.",
         "months": ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"],
     },
     "es": {
@@ -203,6 +214,17 @@ TRANS = {
         "force_migration": "Forzar migración usuarios antiguos",
         "migration_ok": "Migración ejecutada.",
         "supabase_error": "No se ha podido conectar con Supabase. Revisa SUPABASE_URL y SUPABASE_KEY en Streamlit Secrets.",
+        "edit_br": "✏️ Editar Big Rock",
+        "delete_br": "🗑 Eliminar Big Rock",
+        "duplicate_br": "📋 Duplicar Big Rock",
+        "confirm_delete_br": "Confirmo que quiero eliminar esta Big Rock y todas sus TARs",
+        "br_deleted": "Big Rock eliminada correctamente.",
+        "br_duplicated": "Big Rock duplicada correctamente.",
+        "br_recurrent": "Big Rock recurrente",
+        "min_one_tar": "Hay que crear al menos una TAR para guardar la Big Rock.",
+        "save_br_changes": "Guardar cambios Big Rock",
+        "recurrent_detected": "Big Rocks recurrentes detectadas",
+        "reset_recurrent_hint": "Marca las Big Rocks recurrentes que quieres reiniciar al 0% al copiarlas al mes siguiente.",
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     },
 }
@@ -249,6 +271,7 @@ h1{font-size:42px!important;line-height:50px!important;font-weight:700!important
 .tar-title{font-size:15px;font-weight:700;color:var(--s-primary-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tar-left-blue{width:6px;background:var(--s-primary);border-radius:999px;min-height:156px;height:100%;margin-top:0;}
 .tar-edit-btn button{min-width:38px!important;width:38px!important;padding-left:0!important;padding-right:0!important;background:var(--s-primary)!important;color:#fff!important;border:1px solid var(--s-primary)!important;}
+.br-actions-box{background:#fff;border:1px solid #E2EBF0;border-left:6px solid var(--s-primary);border-radius:8px;padding:14px 16px;margin:10px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}
 .s-progress{width:100%;background:#D9E3E8;border-radius:999px;overflow:hidden;height:28px;margin:6px 0 16px 0;}
 .s-progress-inner{height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;min-width:38px;background:var(--s-primary)!important;}
 .tar-select-slider-wrap{background:transparent!important;border:none!important;padding:0!important;margin:4px 0 6px 0;}
@@ -267,7 +290,7 @@ h1{font-size:42px!important;line-height:50px!important;font-weight:700!important
 .report-br-card{background:#fff;border:1px solid #E2EBF0;border-left:6px solid var(--s-primary);border-radius:8px;padding:14px 18px;margin:12px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}
 .report-br-title{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}
 .report-tar-line{font-size:14px;margin:4px 0;color:var(--s-text);}
-.evaluation-summary-card,.month-close-prompt{background:#fff;border:1px solid #C6E0EC;border-left:6px solid var(--s-primary);border-radius:8px;padding:16px 18px;margin:12px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}
+.evaluation-summary-card,.month-close-prompt,.recurrent-card{background:#fff;border:1px solid #C6E0EC;border-left:6px solid var(--s-primary);border-radius:8px;padding:16px 18px;margin:12px 0 18px 0;box-shadow:0 2px 9px rgba(35,35,35,.06);}
 .evaluation-summary-title,.month-close-title{font-size:18px;font-weight:700;color:var(--s-primary-dark);margin-bottom:8px;}
 .evaluation-summary-text,.month-close-text{font-size:14px;color:var(--s-text);line-height:1.55;margin:4px 0;}
 .evaluation-summary-pill{display:inline-flex;align-items:center;gap:6px;background:#E7F2F7;border:1px solid #C6E0EC;color:var(--s-primary-dark);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700;margin:4px 8px 4px 0;}
@@ -304,7 +327,6 @@ def get_supabase_client():
     if not url or not key:
         return None
     return create_client(url, key)
-
 
 supabase = get_supabase_client()
 if supabase is None:
@@ -372,23 +394,28 @@ def update_user_login(username):
     supabase.table("usuaris").update({"last_login": now_iso()}).eq("username", username).execute()
 
 # ============================================================
-# NOTES
+# NOTES + METADATA
 # ============================================================
 
 def unpack_notes(raw):
     if not raw:
-        return "", {}
+        return "", {}, {}
     if isinstance(raw, str) and raw.startswith(NOTES_PREFIX):
         try:
             obj = json.loads(raw[len(NOTES_PREFIX):])
-            return obj.get("br_notes", "") or "", obj.get("tar_notes", {}) or {}
+            return obj.get("br_notes", "") or "", obj.get("tar_notes", {}) or {}, obj.get("meta", {}) or {}
         except Exception:
-            return "", {}
-    return raw, {}
+            return "", {}, {}
+    return raw, {}, {}
 
 
-def pack_notes(br_notes, tar_notes):
-    return NOTES_PREFIX + json.dumps({"br_notes": br_notes or "", "tar_notes": tar_notes or {}}, ensure_ascii=False)
+def pack_notes(br_notes, tar_notes, meta=None):
+    return NOTES_PREFIX + json.dumps({"br_notes": br_notes or "", "tar_notes": tar_notes or {}, "meta": meta or {}}, ensure_ascii=False)
+
+
+def br_is_recurrent(raw_notes):
+    _, _, meta = unpack_notes(raw_notes)
+    return bool(meta.get("recurrent", False))
 
 # ============================================================
 # MONTHS
@@ -620,7 +647,8 @@ def get_existing_br_in_month(username, month, br_name):
     return data[0] if data else None
 
 
-def create_next_month_from_pending(username, month):
+def create_next_month_from_pending(username, month, reset_recurrent_map=None):
+    reset_recurrent_map = reset_recurrent_map or {}
     source_month = parse_month_to_canonical(month)
     target_month = next_month(source_month)
     brs = get_brs(username, source_month)
@@ -630,11 +658,13 @@ def create_next_month_from_pending(username, month):
     created_tars = 0
 
     for br in brs:
-        pending_tars = [tar for tar in tars_by_br.get(br["id"], []) if int(tar.get("progres") or 0) < 100]
-        if not pending_tars:
+        recurrent = br_is_recurrent(br.get("notes_progres"))
+        source_tars = tars_by_br.get(br["id"], [])
+        carry_tars = [tar for tar in source_tars if recurrent or int(tar.get("progres") or 0) < 100]
+        if not carry_tars:
             continue
 
-        br_notes, _ = unpack_notes(br.get("notes_progres"))
+        br_notes, _, meta = unpack_notes(br.get("notes_progres"))
         existing = get_existing_br_in_month(username, target_month, br.get("nom") or "")
         if existing:
             new_br_id = existing["id"]
@@ -647,7 +677,7 @@ def create_next_month_from_pending(username, month):
                 "nom": br.get("nom") or "",
                 "persones": br.get("persones") or "",
                 "reunions": br.get("reunions") or "",
-                "notes_progres": pack_notes(br_notes, {}),
+                "notes_progres": pack_notes(br_notes, {}, meta),
                 "pregunta": br.get("pregunta") or "",
                 "passos": br.get("passos") or "",
                 "created_at": now_iso(),
@@ -661,15 +691,17 @@ def create_next_month_from_pending(username, month):
             created_brs += 1
 
         rows = []
-        for idx, tar in enumerate(pending_tars, start=1):
+        should_reset = recurrent and bool(reset_recurrent_map.get(str(br["id"]), False))
+        for idx, tar in enumerate(carry_tars, start=1):
             desc = str(tar.get("descripcio") or "").strip()
             if desc.lower() in existing_descs:
                 continue
+            progress_value = 0 if should_reset else int(tar.get("progres") or 0)
             rows.append({
                 "id_br": new_br_id,
                 "num": tar.get("num") or f"TAR {idx}",
                 "descripcio": desc,
-                "progres": int(tar.get("progres") or 0),
+                "progres": progress_value,
                 "estat": "Actiu",
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
@@ -681,9 +713,9 @@ def create_next_month_from_pending(username, month):
     return target_month, created_brs, created_tars
 
 
-def close_month_and_open_next(username, month):
+def close_month_and_open_next(username, month, reset_recurrent_map=None):
     close_month(username, month)
-    return create_next_month_from_pending(username, month)
+    return create_next_month_from_pending(username, month, reset_recurrent_map)
 
 
 def delete_month(username, month):
@@ -704,6 +736,60 @@ def delete_month(username, month):
 def latest_month(username):
     months = [m for m in get_months(username) if re.match(r"^\d{4}-\d{2}$", str(m))]
     return max(months) if months else None
+
+
+def delete_bigrock(br_id):
+    supabase.table("tars").delete().eq("id_br", br_id).execute()
+    supabase.table("big_rocks").delete().eq("id", br_id).execute()
+
+
+def update_bigrock_details(br_id, nom, persones, reunions, raw_notes, br_notes, pregunta, passos, recurrent):
+    _, tar_notes, meta = unpack_notes(raw_notes)
+    meta["recurrent"] = bool(recurrent)
+    supabase.table("big_rocks").update({
+        "nom": nom,
+        "persones": persones,
+        "reunions": reunions,
+        "notes_progres": pack_notes(br_notes, tar_notes, meta),
+        "pregunta": pregunta,
+        "passos": passos,
+        "updated_at": now_iso(),
+    }).eq("id", br_id).execute()
+
+
+def duplicate_bigrock(username, month, br, br_tars):
+    br_notes, _, meta = unpack_notes(br.get("notes_progres"))
+    duplicated_name = f"{br.get('nom') or ''} copia".strip()
+    res = supabase.table("big_rocks").insert({
+        "username": username,
+        "mes": parse_month_to_canonical(month),
+        "nom": duplicated_name,
+        "persones": br.get("persones") or "",
+        "reunions": br.get("reunions") or "",
+        "notes_progres": pack_notes(br_notes, {}, meta),
+        "pregunta": br.get("pregunta") or "",
+        "passos": br.get("passos") or "",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }).execute()
+    data = s_data(res)
+    if not data:
+        return None
+    new_br_id = data[0]["id"]
+    rows = []
+    for idx, tar in enumerate(br_tars, start=1):
+        rows.append({
+            "id_br": new_br_id,
+            "num": tar.get("num") or f"TAR {idx}",
+            "descripcio": tar.get("descripcio") or "",
+            "progres": 0,
+            "estat": "Actiu",
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        })
+    if rows:
+        supabase.table("tars").insert(rows).execute()
+    return new_br_id
 
 
 def stats_from_tars(tars):
@@ -736,9 +822,8 @@ def compliance_label(percent, lang=None):
 
 
 def build_month_evaluation_summary(brs, tars_by_br, all_stats):
-    lang = st.session_state.get("idioma", "ca")
     avg = int(all_stats.get("avg", 0))
-    icon, label, conclusion = compliance_label(avg, lang)
+    icon, label, conclusion = compliance_label(avg, st.session_state.get("idioma", "ca"))
     return f"""
     <div class='evaluation-summary-card'>
         <div class='evaluation-summary-title'>{t('auto_analysis_title')}</div>
@@ -756,14 +841,17 @@ def compact_month_evaluation_text(all_stats):
     return f"{icon} {t('global_comp')}: {avg}%. {t('conclusion')}: {label}; {conclusion}"
 
 
-def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes, pregunta, passos):
+def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes, pregunta, passos, recurrent=False):
+    clean_tars = [str(desc).strip() for desc in tar_descs if str(desc).strip()]
+    if not clean_tars:
+        raise ValueError(t("min_one_tar"))
     res = supabase.table("big_rocks").insert({
         "username": username,
         "mes": parse_month_to_canonical(month),
         "nom": nom,
         "persones": persones,
         "reunions": reunions,
-        "notes_progres": pack_notes(br_notes, {}),
+        "notes_progres": pack_notes(br_notes, {}, {"recurrent": bool(recurrent)}),
         "pregunta": pregunta,
         "passos": passos,
         "created_at": now_iso(),
@@ -774,12 +862,10 @@ def create_bigrock(username, month, nom, persones, reunions, tar_descs, br_notes
         return None
     br_id = data[0]["id"]
     rows = [
-        {"id_br": br_id, "num": f"TAR {i}", "descripcio": desc.strip(), "progres": 0, "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()}
-        for i, desc in enumerate(tar_descs, start=1)
-        if desc.strip()
+        {"id_br": br_id, "num": f"TAR {i}", "descripcio": desc, "progres": 0, "estat": "Actiu", "created_at": now_iso(), "updated_at": now_iso()}
+        for i, desc in enumerate(clean_tars, start=1)
     ]
-    if rows:
-        supabase.table("tars").insert(rows).execute()
+    supabase.table("tars").insert(rows).execute()
     return br_id
 
 # ============================================================
@@ -790,9 +876,9 @@ def auto_save_br_fields(br_id, raw_current_notes, notes_key, preg_key, passos_ke
     br_notes_value = st.session_state.get(notes_key, "")
     pregunta_value = st.session_state.get(preg_key, "")
     passos_value = st.session_state.get(passos_key, "")
-    _, existing_tar_notes = unpack_notes(raw_current_notes)
+    _, existing_tar_notes, meta = unpack_notes(raw_current_notes)
     supabase.table("big_rocks").update({
-        "notes_progres": pack_notes(br_notes_value, existing_tar_notes),
+        "notes_progres": pack_notes(br_notes_value, existing_tar_notes, meta),
         "pregunta": pregunta_value,
         "passos": passos_value,
         "updated_at": now_iso(),
@@ -818,10 +904,15 @@ def toggle_tar_edit(tar_id):
     st.session_state[key] = not st.session_state.get(key, False)
 
 
+def toggle_br_edit(br_id):
+    key = f"editing_br_{br_id}"
+    st.session_state[key] = not st.session_state.get(key, False)
+
+
 def auto_save_tar_note(br_id, raw_current_notes, tar_id, note_key):
-    br_notes_value, existing_tar_notes = unpack_notes(raw_current_notes)
+    br_notes_value, existing_tar_notes, meta = unpack_notes(raw_current_notes)
     existing_tar_notes[str(tar_id)] = st.session_state.get(note_key, "") or ""
-    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes), "updated_at": now_iso()}).eq("id", br_id).execute()
+    supabase.table("big_rocks").update({"notes_progres": pack_notes(br_notes_value, existing_tar_notes, meta), "updated_at": now_iso()}).eq("id", br_id).execute()
 
 
 def render_tar_select_slider(tar_id, prog_key, current_progress, disabled=False):
@@ -1112,10 +1203,19 @@ def render_report(title, allow_close=False):
     progress_bar(all_stats["avg"], f"{all_stats['avg']}%")
     st.markdown(build_month_evaluation_summary(brs, tars_by_br, all_stats), unsafe_allow_html=True)
 
+    recurrent_brs = [br for br in brs if br_is_recurrent(br.get("notes_progres"))]
+    reset_map = {}
+    if allow_close and recurrent_brs and not es_tancat:
+        st.markdown(f"<div class='recurrent-card'><div class='evaluation-summary-title'>{t('recurrent_detected')}</div><div class='evaluation-summary-text'>{t('reset_recurrent_hint')}</div></div>", unsafe_allow_html=True)
+        for br in recurrent_brs:
+            key = f"reset_recurrent_{br['id']}"
+            reset_map[str(br["id"])] = st.checkbox(f"{br.get('nom') or 'Big Rock'} → 0%", value=True, key=key)
+
     for br in brs:
         br_tars = tars_by_br.get(br["id"], [])
         br_stats = stats_from_tars(br_tars)
-        st.markdown(f"<div class='report-br-card'><div class='report-br-title'>📌 {safe_html(br.get('nom') or '')} · {br_stats['avg']}%</div>", unsafe_allow_html=True)
+        recurrent_badge = " 🔄" if br_is_recurrent(br.get("notes_progres")) else ""
+        st.markdown(f"<div class='report-br-card'><div class='report-br-title'>📌 {safe_html(br.get('nom') or '')}{recurrent_badge} · {br_stats['avg']}%</div>", unsafe_allow_html=True)
         if br_tars:
             for tar in br_tars:
                 progres = int(tar.get("progres") or 0)
@@ -1128,7 +1228,7 @@ def render_report(title, allow_close=False):
     if allow_close and not es_tancat:
         if st.button(t("confirm_close"), type="primary", use_container_width=True):
             close_summary_text = compact_month_evaluation_text(all_stats)
-            target_month, created_brs, created_tars = close_month_and_open_next(USUARI, MES)
+            target_month, created_brs, created_tars = close_month_and_open_next(USUARI, MES, reset_map)
             st.session_state.mes_actual = target_month
             st.session_state.month_selector_nonce += 1
             st.session_state.pantalla = "dashboard"
@@ -1139,7 +1239,6 @@ def render_report(title, allow_close=False):
                 "created_tars": created_tars,
                 "summary": close_summary_text,
             }
-            # Si no s'ha traspassat res, obrim directament el formulari per planificar el nou mes.
             st.session_state.mostrar_formulari_br = created_brs == 0 and created_tars == 0
             st.rerun()
     if st.button(t("back")):
@@ -1240,9 +1339,11 @@ else:
             stats = stats_from_tars(tar_list)
             progres_mitja = stats["avg"]
             is_open = str(st.session_state.get("open_br_id")) == str(br_id)
-            br_notes, tar_notes = unpack_notes(br.get("notes_progres"))
+            br_notes, tar_notes, br_meta = unpack_notes(br.get("notes_progres"))
+            recurrent = bool(br_meta.get("recurrent", False))
             icon = "▼" if is_open else "▶"
-            label = f"{icon} {br.get('nom') or ''}  {status_dot(progres_mitja)} {progres_mitja}% · {stats['total']} TARs · {stats['completed']} completades · {stats['in_progress']} en curs · {stats['pending']} pendents"
+            recurr = " 🔄" if recurrent else ""
+            label = f"{icon} {br.get('nom') or ''}{recurr}  {status_dot(progres_mitja)} {progres_mitja}% · {stats['total']} TARs · {stats['completed']} completades · {stats['in_progress']} en curs · {stats['pending']} pendents"
             st.markdown('<div class="open-card-button">', unsafe_allow_html=True)
             st.button(label, key=f"card_br_{br_id}", use_container_width=True, on_click=toggle_bigrock, args=(br_id,))
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1251,6 +1352,46 @@ else:
 
             st.markdown(f"<div class='info-card'><div class='info-card-meta'><strong>{t('key_ppl')}:</strong> {safe_html(br.get('persones') or '-')} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>{t('key_meet')}:</strong> {safe_html(br.get('reunions') or '-')}</div></div>", unsafe_allow_html=True)
             progress_bar(progres_mitja, f"{progres_mitja}%")
+
+            with st.container():
+                b1, b2, b3 = st.columns([1.1, 1.1, 1.1])
+                with b1:
+                    st.button(t("edit_br"), key=f"edit_br_btn_{br_id}", use_container_width=True, disabled=es_tancat, on_click=toggle_br_edit, args=(br_id,))
+                with b2:
+                    if st.button(t("duplicate_br"), key=f"dup_br_{br_id}", use_container_width=True, disabled=es_tancat):
+                        new_id = duplicate_bigrock(USUARI, MES, br, tar_list)
+                        st.session_state.open_br_id = str(new_id) if new_id else str(br_id)
+                        st.success(t("br_duplicated"))
+                        st.rerun()
+                with b3:
+                    st.checkbox(t("confirm_delete_br"), key=f"confirm_delete_br_{br_id}", disabled=es_tancat)
+                    if st.button(t("delete_br"), key=f"delete_br_{br_id}", use_container_width=True, disabled=es_tancat or not st.session_state.get(f"confirm_delete_br_{br_id}", False)):
+                        delete_bigrock(br_id)
+                        st.session_state.open_br_id = None
+                        st.success(t("br_deleted"))
+                        st.rerun()
+
+            if st.session_state.get(f"editing_br_{br_id}", False):
+                st.markdown("<div class='br-actions-box'>", unsafe_allow_html=True)
+                try:
+                    edit_form = st.form(f"edit_bigrock_form_{br_id}", enter_to_submit=False)
+                except TypeError:
+                    edit_form = st.form(f"edit_bigrock_form_{br_id}")
+                with edit_form:
+                    e_nom = st.text_input(t("title_br"), value=br.get("nom") or "")
+                    c1, c2 = st.columns(2)
+                    e_persones = c1.text_input(t("key_ppl"), value=br.get("persones") or "")
+                    e_reunions = c2.text_input(t("key_meet"), value=br.get("reunions") or "")
+                    e_recurrent = st.checkbox(t("br_recurrent"), value=recurrent)
+                    e_notes = st.text_area(t("prog"), value=br_notes)
+                    e_pregunta = st.text_input(t("need"), value=br.get("pregunta") or "")
+                    e_passos = st.text_input(t("next_steps"), value=br.get("passos") or "")
+                    if st.form_submit_button(t("save_br_changes"), type="primary", use_container_width=True):
+                        update_bigrock_details(br_id, e_nom.strip(), e_persones.strip(), e_reunions.strip(), br.get("notes_progres"), e_notes, e_pregunta, e_passos, e_recurrent)
+                        st.session_state[f"editing_br_{br_id}"] = False
+                        st.success(t("saved"))
+                        st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
             notes_key = f"notes_{br_id}"
             preg_key = f"preg_{br_id}"
@@ -1297,11 +1438,16 @@ else:
             st.session_state.mostrar_formulari_br = not st.session_state.mostrar_formulari_br
         if st.session_state.mostrar_formulari_br:
             st.subheader(t("config_br"))
-            with st.form("form_nova_br"):
+            try:
+                nova_form = st.form("form_nova_br", enter_to_submit=False)
+            except TypeError:
+                nova_form = st.form("form_nova_br")
+            with nova_form:
                 nou_nom = st.text_input(t("title_br"), placeholder=t("title_placeholder"))
                 c1, c2 = st.columns(2)
                 persones = c1.text_input(t("key_ppl"), placeholder=t("people_placeholder"))
                 reunions = c2.text_input(t("key_meet"), placeholder=t("meetings_placeholder"))
+                recurrent_new = st.checkbox(t("br_recurrent"), value=False)
                 with st.expander(t("details"), expanded=True):
                     br_notes_new = st.text_area(t("prog"), placeholder=t("prog"))
                     pregunta_new = st.text_input(t("need"), placeholder=t("need"))
@@ -1315,9 +1461,11 @@ else:
                 if submitted:
                     if not nou_nom.strip():
                         st.error(t("title_br"))
+                    elif not any(x.strip() for x in [t1, t2, t3, t4]):
+                        st.error(t("min_one_tar"))
                     else:
                         try:
-                            new_id = create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4], br_notes_new, pregunta_new, passos_new)
+                            new_id = create_bigrock(USUARI, MES, nou_nom.strip(), persones.strip(), reunions.strip(), [t1, t2, t3, t4], br_notes_new, pregunta_new, passos_new, recurrent_new)
                             st.session_state.mostrar_formulari_br = False
                             st.session_state.open_br_id = str(new_id)
                             st.rerun()
