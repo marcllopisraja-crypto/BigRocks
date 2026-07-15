@@ -1,7 +1,7 @@
 import requests
 import sys
 
-url = https://bigrocks.streamlit.app/ # La web que vols comprovar
+url = "https://bigrocks.streamlit.app/" # La web que vols comprovar
 
 try:
     response = requests.get(url, timeout=10)
