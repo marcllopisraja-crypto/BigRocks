@@ -10,10 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Wake App
+      - name: Check App
         run: |
-          curl \
-          -A "Mozilla/5.0" \
-          -L \
-          https://bigrocks.streamlit.app \
-          > /dev/null
+          curl -I https://bigrocks.streamlit.app
