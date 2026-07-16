@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check App
+      - name: Ping BigRocks
         run: |
-          curl -I https://bigrocks.streamlit.app
+          curl -s \
+          -A "Mozilla/5.0" \
+          https://bigrocks.streamlit.app \
+          > /dev/null
