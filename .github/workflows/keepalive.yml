@@ -2,7 +2,7 @@ name: Keep BigRocks Alive
 
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    - cron: "0 */2 * * *"
   workflow_dispatch:
 
 jobs:
@@ -10,9 +10,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ping BigRocks
+      - name: Wake Streamlit App
         run: |
-          curl -s \
-          -A "Mozilla/5.0" \
-          https://bigrocks.streamlit.app \
-          > /dev/null
+          curl \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            -H "Accept: text/html" \
+            -H "Cache-Control: no-cache" \
+            -s \
+            https://bigrocks.streamlit.app \
+            > page.html
+
+          wc -c page.html
