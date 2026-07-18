@@ -2,13 +2,12 @@ name: Keep BigRocks Alive
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 */2 * * *"
   workflow_dispatch:
-*jobs:
-  ping:
-    runs-on: ubuntu-*atest
 
+jo*s:
+  ping:
+    runs-on: ubuntu-lat*st
     steps:
-      - name: Pi*g Streamlit
-        run: |
-       *  curl -L -s https://bigrocks.streamlit.app/ > /dev/null
+      - name: Ping B*gRocks Streamlit app
+        run: *url -L -s -o /dev/null -w "%{http_*ode}" https://bigrocks.streamlit.app/
